@@ -1,0 +1,938 @@
+﻿//== code for foo_spider_monkey_panel v1.2.2 or higher ==
+
+window.DefinePanel('smp-cover',
+    {
+        version: '1.0.0',
+        author: 'tomato111',
+        features: { drag_n_drop: true }
+    }
+);
+include(fb.ProfilePath + 'smp-scripts\\common\\lib.js');
+
+
+const fs = new ActiveXObject('Scripting.FileSystemObject'); // File System Object
+const ws = new ActiveXObject('WScript.Shell'); // WScript Shell Object
+const scriptName = "smp-cover";
+const scriptDir = fb.ProfilePath + 'smp-scripts\\smp-cover\\';
+const MF_SEPARATOR = 0x00000800;
+const MF_STRING = 0x00000000;
+const MF_GRAYED = 0x00000001;
+const MF_CHECKED = 0x00000008;
+const MF_UNCHECKED = 0x00000000;
+const VK_SHIFT = 0x10;
+const VK_CONTROL = 0x11;
+const VK_ALT = 0x12;
+
+let ww, wh;
+let isDragging = false;
+
+
+//=======================
+//= Properties Object ===
+//=======================
+const Prop = new function () {
+
+    const allowedValue = (val, type, min, max, def) => {
+        if (typeof val !== type)
+            val = def;
+        else if (val < min)
+            val = min;
+        else if (val > max)
+            val = max;
+
+        return val;
+    };
+
+    //--------------------
+    this.Panel = {
+        Path: window.GetProperty('Panel.Path', '<front>||<back>||$directory_path(%path%)\\*.*'), // Separate paths by "||"
+        FollowCursor: window.GetProperty('Panel.FollowCursor', 1), // 0: Never, 1: When not playing, 2: Always
+        Lang: window.GetProperty('Panel.Language', '').toLowerCase(),
+        ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
+        HideConf: window.GetProperty("Panel.HideConfigureMenu", false),
+        BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,0)'),
+        DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items') // Add dropped items to playlist. TitleFormatting is available
+    };
+
+    window.SetProperty('Panel.FollowCursor', this.Panel.FollowCursor = allowedValue(this.Panel.FollowCursor, 'number', 0, 2, 1));
+
+    if (/^RGBA\(.+?\)$/.test(this.Panel.BackgroundColor))
+        this.Panel.BackgroundColor = eval(RegExp.lastMatch);
+
+
+    //--------------------
+    this.Cycle = {
+        Pause: window.GetProperty('Cycle.Pause', false),
+        Interval: window.GetProperty('Cycle.Interval', 10000),
+        AutoPauseWhenFollowCursor: window.GetProperty('Cycle.AutoPauseWhenFollowCursor', true),
+        Animation: {
+            Duration: window.GetProperty('Cycle.Animation.Duration', 400)
+        },
+        Shuffle: window.GetProperty('Cycle.Shuffle', 0) // 0: Disable, 1...: shuffle on and after {num}
+    };
+
+    window.SetProperty('Cycle.Interval', this.Cycle.Interval = allowedValue(this.Cycle.Interval, 'number', 2000, Infinity, 10000));
+    window.SetProperty('Cycle.Animation.Duration', this.Cycle.Animation.Duration = allowedValue(this.Cycle.Animation.Duration, 'number', 100, this.Cycle.Interval, 400));
+    window.SetProperty('Cycle.Shuffle', this.Cycle.Shuffle = allowedValue(this.Cycle.Shuffle, 'number', 0, Infinity, 0));
+
+
+    //--------------------
+    this.Image = {
+        NoCoverPath: window.GetProperty('Image.NoCoverPath', ''),
+        Stretch: window.GetProperty('Image.Stretch', false),
+        Margin: window.GetProperty('Image.Margin', '6,6,6,6'), // Margin between Panel and Image
+        SubstitutedPath: window.GetProperty('Image.SubstitutedPath', ''), // Open substituted path when do 'View With External Viewer' on embed cover
+        Case: {
+            Enable: window.GetProperty('Image.Case.Enable', true),
+            AdjustSize: window.GetProperty('Image.Case.AdjustSize', '4,4,4,4'), // Relative with cover image. Separate with comma, like "5,5,5,5". (left,up,right,down)
+            Path: window.GetProperty('Image.Case.Path', ''),
+            FixedSizeMode: window.GetProperty('Image.Case.FixedSizeMode', false),
+            FixedSize: window.GetProperty('Image.Case.FixedSize', '0,0,ww,wh') // Separate with comma, like "0,0,200,150". (x,y,w,h)
+        },
+        Reflect: {
+            Enable: window.GetProperty('Image.Reflect.Enable', false),
+            Ratio: window.GetProperty('Image.Reflect.Ratio', 0.15),
+            Distance: window.GetProperty('Image.Reflect.Distance', 6)
+        }
+    };
+
+    if (!this.Image.Margin)
+        window.SetProperty('Image.Margin', this.Image.Margin = '6,6,6,6');
+    if (!this.Image.Case.AdjustSize)
+        window.SetProperty('Image.Case.AdjustSize', this.Image.Case.AdjustSize = '0,0,0,0');
+    if (!this.Image.Case.FixedSize)
+        window.SetProperty('Image.Case.FixedSize', this.Image.Case.FixedSize = '0,0,ww,wh');
+    window.SetProperty('Image.Reflect.Ratio', this.Image.Reflect.Ratio = allowedValue(this.Image.Reflect.Ratio, 'number', 0.05, 0.50, 0.15));
+    window.SetProperty('Image.Reflect.Distance', this.Image.Reflect.Distance = allowedValue(this.Image.Reflect.Distance, 'number', 0, Infinity, 6));
+
+    if (this.Image.Case.Path && !/^[a-z]:\\./i.test(this.Image.Case.Path))
+        this.Image.Case.Path = fb.ProfilePath + this.Image.Case.Path;
+};
+
+
+//=======================
+//= Load Language =======
+//=======================
+
+const Language = {
+
+    Messages: {},
+    Label: {},
+
+    load: function (path) {
+
+        const languages = utils.Glob(path + '*.ini');
+        const definedLang = languages.map((item) => fs.GetBaseName(item));
+
+        if (!Prop.Panel.Lang || !definedLang.includes(Prop.Panel.Lang)) {
+            let lang = prompt(`Please input menu language.\n"${definedLang.join('", "')}" is available.`, scriptName, 'en');
+            if (!definedLang.includes(lang))
+                lang = 'en';
+            window.SetProperty('Panel.Language', Prop.Panel.Lang = lang);
+        }
+
+        const defaultIni = new Ini(path + 'default', 'UTF-8');
+        const langIni = new Ini(path + Prop.Panel.Lang + '.ini', 'UTF-8');
+
+        if (!defaultIni.items.get('Message') || !defaultIni.items.get('Label'))
+            throw new Error(`Faild to load default language file. (${scriptName})`);
+
+
+        ((def, lang) => {
+            let tmp0 = def.get('Message') || new Map();
+            let tmp1 = lang.get('Message') || new Map();
+            const typelist = { conf: 36, warn: 48, info: 64 };
+
+            for (const [name, value] of tmp0) {
+                const _type = name.split('_')[0].toLowerCase();
+                this.Messages[name] = new Message(tmp1.get(name) || value, scriptName, typelist[_type] || 0);
+            }
+
+            tmp0 = def.get('Label') || new Map();
+            tmp1 = lang.get('Label') || new Map();
+
+            for (const [name, value] of tmp0) {
+                this.Label[name] = tmp1.get(name) || value;
+            }
+
+        })(defaultIni.items, langIni.items);
+
+    }
+};
+
+Language.load(scriptDir + 'languages\\');
+
+
+//========================
+//= Define Image Loader ==
+//========================
+const ImageLoader = new function () {
+
+    const ImgsCacheCapacity = 30;
+    const ImgsCache = [];
+
+    ImgsCache.Store = function (path, img, reflImg) {
+        this.unshift({ path, img, reflImg });
+        this.length = Math.min(this.length, ImgsCacheCapacity);
+    };
+    ImgsCache.SearchFor = function (path, noCache) {
+        let result;
+        this.some((item, idx) => {
+            if (item.path === path) {
+                result = this.splice(idx, 1).pop();
+                return true;
+            }
+        });
+        result && !noCache && this.unshift(result); // Reposition forward
+        return !noCache && result;
+    };
+
+    const createReflImg = (img, ratio_applied_h) => {
+        img = rotateImg(img, 6);
+
+        const h = ratio_applied_h / (1 - Prop.Image.Reflect.Ratio);
+        const reflH = h - ratio_applied_h;
+        img = img.Clone(0, 0, img.Width, Math.min(reflH, img.Height));
+
+        const maskImg = gdi.CreateImage(img.Width, img.Height);
+        const gr = maskImg.GetGraphics();
+        gr.FillGradRect(0, 0, maskImg.Width, maskImg.Height, 90, RGBA(144, 144, 144), RGBA(255, 255, 255), 1.0);
+        maskImg.ReleaseGraphics(gr);
+
+        img.ApplyMask(maskImg);
+        return img;
+    };
+
+
+    this.getImg = function (path, dstW, dstH, noCache) {
+        if (!path) return;
+
+        const artIdRE = [/>front>$/, />back>$/, />disc>$/, />icon>$/, />artist>$/];
+        let art_id = 0;
+        let result = ImgsCache.SearchFor(path, noCache);
+        let img, reflImg;
+
+        if (!result) {
+            if (path.startsWith('<')) { // Embed image
+                for (let i = 0; i < artIdRE.length; i++) {
+                    if (artIdRE[i].test(path)) {
+                        art_id = i; break;
+                    }
+                }
+                img = utils.GetAlbumArtEmbedded(path.match(/^<(.+?)>/)[1], art_id);
+            }
+            else
+                img = gdi.Image(path);
+
+
+            if (img) {
+                if (dstW && dstH) { // キャッシュに格納する前にリサイズ
+                    const size = calcImgSize(img, dstW, dstH, Prop.Image.Stretch);
+                    img = img.Resize(size.width, size.height, 7);
+                }
+                if (Prop.Image.Reflect.Enable)
+                    reflImg = createReflImg(img, dstH);
+                result = { path, img, reflImg };
+                ImgsCache.Store(path, img, reflImg);
+            }
+        }
+
+        return result;
+    };
+
+    this.clearCache = function () {
+        ImgsCache.length = 0;
+    };
+
+}();
+
+
+//========================
+//= Define Path Checker ==
+//========================
+const PathChecker = new function () {
+
+    const PathCacheCapacity = 100;
+    const PathsCache = [];
+
+    PathsCache.Store = function (path, files) {
+        this.unshift({ path, files });
+        this.length = Math.min(this.length, PathCacheCapacity);
+    };
+    PathsCache.SearchFor = function (path) {
+        let result = {};
+        this.some((item, index) => {
+            if (item.path === path) {
+                result = this.splice(index, 1).pop();
+                return true;
+            }
+        });
+        this.unshift(result); // Reposition forward
+        return result.files || [];
+    };
+
+    const isSupportedType = (path) => ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(path.split('.').pop().toLowerCase());
+
+    const parsePathFormat = (format, metadb) => {
+        const artIdRE = [/<(?=front>)/gi, /<(?=back>)/gi, /<(?=disc>)/gi, /<(?=icon>)/gi, /<(?=artist>)/gi];
+        let paths;
+        if (metadb) {
+            paths = fb.TitleFormat(format).EvalWithMetadb(metadb);
+            for (const re of artIdRE) {
+                paths = paths.replace(re, '<' + metadb.RawPath + '>');
+            }
+        }
+        return paths;
+    };
+
+    this.getImgFilePaths = function (paths, metadb) {
+        const allImgFilePaths = [];
+        allImgFilePaths.srcStr = parsePathFormat(paths, metadb);
+
+        const src_arr = allImgFilePaths.srcStr.split('||');
+
+        for (let i = 0; i < src_arr.length; i++) {
+            const src = src_arr[i];
+            let results = PathsCache.SearchFor(src);
+            if (!results.length) {
+                if (src.startsWith('<')) { // embed cover
+                    results.push(src);
+                } else if (!src.includes('*') && !src.includes('?')) { // not wildcard
+                    isSupportedType(src) && results.push(src);
+                } else { // wildcard
+                    utils.Glob(src).forEach((path) => { isSupportedType(path) && results.push(path); });
+                }
+
+                if (results.length)
+                    PathsCache.Store(src, results);
+            }
+
+            for (; ;) {
+                if (results.length <= 32766) { // 引数制限を回避
+                    allImgFilePaths.push(...results); break;
+                }
+                else
+                    allImgFilePaths.push(...results.splice(0, 32766));
+            }
+        }
+
+        return allImgFilePaths;
+    };
+
+    this.clearCache = function () {
+        PathsCache.length = 0;
+    };
+
+}();
+
+
+//========================
+//= Define Display Style =
+//========================
+const Display = new function () {
+    let margin = Prop.Image.Margin.split(/\s*,\s*/).map((item) => Number(item));
+    margin = { top: margin[1], left: margin[0], bottom: margin[3], right: margin[2] };
+    let width, height;
+
+    const refreshInterval = 30; // [ms]
+    const step = Math.min(Math.ceil(255 * refreshInterval / Prop.Cycle.Animation.Duration), 255); // 255 / (Prop.Cycle.Animation.Duration / refreshInterval)
+    const caseImg = gdi.Image(Prop.Image.Case.Path || scriptDir + 'images\\case.png');
+    const caseRel = Prop.Image.Case.AdjustSize.split(/\s*,\s*/).map((item) => Number(item));
+
+    let opacity = 255;
+    let currImgPath, currImg, currSize;
+    let newImg, newSize;
+    let currReflImg, newReflImg, caseFixedSize;
+
+    const onTimer = () => {
+        if (opacity > 0) {
+            opacity = Math.max(opacity - step, 0);
+        } else {
+            onTimer.clearInterval();
+            currImg = newImg;
+            currSize = newSize;
+            currReflImg = newReflImg;
+            newImg = newSize = newReflImg = null;
+            opacity = 255;
+        }
+        window.Repaint();
+    };
+
+
+    this.changeImage = function (path) {
+        const result = ImageLoader.getImg(path, width, height);
+        if (!result) { // キャッシュ含めて画像が読み込めない場合
+            return false;
+        }
+        else if (path === currImgPath) {
+            return true;
+        }
+        else {
+            //console2("::get", path);
+            currImgPath = path;
+            newImg = result.img;
+            newSize = calcImgSize(result.img, width, height, Prop.Image.Stretch); // キャッシュから取得した場合は必ずしもGetImgで指定したサイズで返ってくる訳ではないので表示用に計算する
+            if (Prop.Image.Reflect.Enable)
+                newSize.y *= 2; // set to bottom alignment
+            newReflImg = result.reflImg;
+            opacity = 255;
+            onTimer.interval(refreshInterval);
+            return true;
+        }
+    };
+
+    this.refresh = function () {
+        const result = ImageLoader.getImg(currImgPath, width, height, true);
+        if (result) {
+            onTimer.clearInterval();
+            newImg = newSize = newReflImg = null;
+            opacity = 255;
+            currImg = result.img;
+            currSize = calcImgSize(result.img, width, height, Prop.Image.Stretch);
+            if (Prop.Image.Reflect.Enable)
+                currSize.y *= 2; // set to bottom alignment
+            currReflImg = result.reflImg;
+            window.Repaint();
+        }
+    };
+
+    this.onResize = function (ww, wh) {
+        width = ww - margin.left - margin.right;
+        height = wh - margin.top - margin.bottom;
+        if (Prop.Image.Reflect.Enable)
+            height *= 1 - Prop.Image.Reflect.Ratio;
+
+        if (currImg) {
+            currSize = calcImgSize(currImg, width, height, Prop.Image.Stretch);
+            if (Prop.Image.Reflect.Enable)
+                currSize.y *= 2; // set to bottom alignment
+        }
+        if (newImg) {
+            newSize = calcImgSize(newImg, width, height, Prop.Image.Stretch);
+            if (Prop.Image.Reflect.Enable)
+                newSize.y *= 2; // set to bottom alignment
+        }
+
+        caseFixedSize = Prop.Image.Case.FixedSize.split(/\s*,\s*/).map((item) => item.replace('ww', ww).replace('wh', wh));
+    };
+
+    this.onPaint = function (gr) {
+        if (currImg) {
+            gr.DrawImage(currImg, margin.left + currSize.x, margin.top + currSize.y, currSize.width, currSize.height, 0, 0, currImg.Width, currImg.Height, 0, opacity);
+            if (Prop.Image.Reflect.Enable) {
+                gr.DrawImage(currReflImg, margin.left + currSize.x, margin.top + currSize.y + currSize.height + Prop.Image.Reflect.Distance, currSize.width, currReflImg.Height, 0, 0, currReflImg.Width, currReflImg.Height, 0, opacity);
+            }
+        }
+        if (newImg) {
+            gr.DrawImage(newImg, margin.left + newSize.x, margin.top + newSize.y, newSize.width, newSize.height, 0, 0, newImg.Width, newImg.Height, 0, 255 - opacity);
+            if (Prop.Image.Reflect.Enable) {
+                gr.DrawImage(newReflImg, margin.left + newSize.x, margin.top + newSize.y + newSize.height + Prop.Image.Reflect.Distance, newSize.width, newReflImg.Height, 0, 0, newReflImg.Width, newReflImg.Height, 0, 255 - opacity);
+            }
+        }
+        const size = newSize || currSize;
+        if (Prop.Image.Case.Enable && size && caseImg) {
+            if (Prop.Image.Case.FixedSizeMode)
+                gr.DrawImage(caseImg, caseFixedSize[0], caseFixedSize[1], caseFixedSize[2], caseFixedSize[3], 0, 0, caseImg.Width, caseImg.Height, 0, 255);
+            else
+                gr.DrawImage(caseImg, margin.left + size.x - caseRel[0], margin.top + size.y - caseRel[1], size.width + caseRel[0] + caseRel[2], size.height + caseRel[1] + caseRel[3], 0, 0, caseImg.Width, caseImg.Height, 0, 255);
+        }
+    };
+
+}();
+
+
+//========================
+//= Define Controller ====
+//========================
+const Controller = new function () {
+    let currImgPaths = [];
+    let currImgPath;
+    let currImgIdx = 0;
+    const noCoverPath = Prop.Image.NoCoverPath || scriptDir + 'images\\nocover.png';
+
+    const changeImg = function (arg) {
+        switch (arg) {
+            case 2: 	// Last
+                currImgIdx = currImgPaths.length - 1;
+                break;
+            case 1: 	// Next
+                currImgIdx = currImgIdx + 1 < currImgPaths.length ? currImgIdx + 1 : 0;
+                break;
+            case -1: 	// Previous
+                currImgIdx = currImgIdx - 1 >= 0 ? currImgIdx - 1 : currImgPaths.length - 1;
+                break;
+            case -2: 	// First
+                currImgIdx = 0;
+                break;
+            default:
+                currImgIdx = Math.min(currImgIdx, currImgPaths.length - 1);
+        }
+
+        if (currImgPaths.length) {
+            currImgPath = currImgPaths[currImgIdx];
+            //console2("::try", currImgIdx, currImgPath);
+            if (!Display.changeImage(currImgPath)) {
+                currImgPaths.splice(currImgIdx, 1); // 表示出来なかったパスは削除
+                changeImg(); // retry
+            }
+            else
+                Menu.build();
+        }
+        else {
+            currImgPath = noCoverPath;
+            Display.changeImage(currImgPath);
+            Menu.build();
+        }
+    };
+
+    const onTimer = () => {
+        this.next();
+    };
+
+    const resetTimer = function () {
+        !Prop.Cycle.Pause && onTimer.interval(Prop.Cycle.Interval);
+    };
+
+
+    this.play = function () {
+        window.SetProperty('Cycle.Pause', Prop.Cycle.Pause = false);
+        resetTimer();
+    };
+
+    this.pause = function () {
+        window.SetProperty('Cycle.Pause', Prop.Cycle.Pause = true);
+        onTimer.clearInterval();
+    };
+
+    this.next = function () {
+        resetTimer();
+        changeImg(1);
+    };
+
+    this.previous = function () {
+        resetTimer();
+        changeImg(-1);
+    };
+
+    this.first = function () {
+        resetTimer();
+        changeImg(-2);
+    };
+
+    this.last = function () {
+        resetTimer();
+        changeImg(2);
+    };
+
+    this.onNewTrack = function (metadb, followcur) {
+        if (!metadb) return;
+
+        const newImgPaths = PathChecker.getImgFilePaths(Prop.Panel.Path, metadb);
+
+        if (currImgPaths.srcStr !== newImgPaths.srcStr) {
+            currImgPaths = newImgPaths;
+            Prop.Cycle.Shuffle && shuffleArray(currImgPaths, Prop.Cycle.Shuffle - 1);
+            resetTimer();
+            changeImg(-2);
+        }
+
+        if (followcur && Prop.Cycle.AutoPauseWhenFollowCursor) // 設定が有効なら自動サイクルを一時停止
+            onTimer.clearInterval();
+        else
+            resetTimer();
+    };
+
+    this.onStop = function (reason) {
+        if (reason !== 2) { // 2: Starting another track
+            onTimer.clearInterval();
+            currImgPaths = [];
+            changeImg(-2);
+        }
+    };
+
+    this.getCurrImgPaths = function () {
+        return currImgPaths;
+    };
+
+    this.getCurrImgPath = function () {
+        return currImgPath;
+    };
+
+}();
+
+
+//========================
+//= Define Menu Object ===
+//========================
+const Menu = new function () {
+
+    let _menu, _item_list;
+
+    //============
+    // sub menu items
+    //============
+    const submenu_FollowCursor = [ // radio item
+        {
+            Caption: Language.Label.FC_WhenNotPlaying,
+            Func: () => {
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 1);
+                if (fb.IsPlaying)
+                    on_playback_new_track(fb.GetNowPlaying());
+                else
+                    on_item_focus_change();
+                Menu.build();
+            }
+        },
+        {
+            Caption: Language.Label.FC_Always,
+            Func: () => {
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 2);
+                on_item_focus_change();
+                Menu.build();
+            }
+        },
+        {
+            Caption: Language.Label.FC_Never,
+            Func: () => {
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 0);
+                if (fb.IsPlaying)
+                    on_playback_new_track(fb.GetNowPlaying());
+                else
+                    on_playback_stop(0);
+                Menu.build();
+            }
+        }
+    ];
+
+    //=============
+    // main menu items
+    //=============
+    const menu_smp_cover = [
+        {
+            Flag: MF_STRING,
+            Caption: () => Prop.Cycle.Pause ? Language.Label.ResumeCycle : Language.Label.PauseCycle,
+            Func: () => {
+                Prop.Cycle.Pause ? Controller.play() : Controller.pause();
+                Menu.build();
+            }
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.FirstImage,
+            Func: () => { Controller.first(); }
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.LastImage,
+            Func: () => { Controller.last(); }
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.OpenIn,
+            Func: () => {
+                let path = Controller.getCurrImgPath();
+                if (path.startsWith('<')) {
+                    if (Prop.Image.SubstitutedPath) {
+                        if (fb.GetFocusItem() && (Prop.Panel.FollowCursor === 2 || (Prop.Panel.FollowCursor === 1 && !fb.IsPlaying)))
+                            path = fb.TitleFormat(Prop.Image.SubstitutedPath).EvalWithMetadb(fb.GetFocusItem());
+                        else
+                            path = fb.TitleFormat(Prop.Image.SubstitutedPath).Eval();
+
+                        Language.Messages.info_EmbedImage.fbpopup();
+                    }
+                    else
+                        path = null;
+                }
+
+                if (path) {
+                    if (!Prop.Panel.ViewerPath)
+                        execCommand(`"${path}"`);
+                    else
+                        execCommand(`"${Prop.Panel.ViewerPath}" ${path}`);
+                }
+            },
+            ItemId: "OpenIn"
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.OpenFolder,
+            Func: () => {
+                const path = Controller.getCurrImgPath();
+                execCommand('explorer.exe /select,' + path.match(/^<?([^>]+)/)[1]);
+            }
+        },
+        {
+            Flag: MF_SEPARATOR
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.DeleteImage,
+            Func: () => {
+                sendToRecycleBin(Controller.getCurrImgPath());
+                Display.refresh(); // キャッシュから削除
+                Controller.next();
+            }
+        },
+        {
+            Flag: MF_SEPARATOR
+        },
+        {
+            Flag: () => Prop.Image.Case.Enable ? MF_CHECKED : MF_UNCHECKED,
+            Caption: Language.Label.ShowCase,
+            Func: () => {
+                window.SetProperty('Image.Case.Enable', Prop.Image.Case.Enable = !Prop.Image.Case.Enable);
+                window.Repaint();
+                Menu.build();
+            }
+        },
+        {
+            Flag: () => Prop.Image.Reflect.Enable ? MF_CHECKED : MF_UNCHECKED,
+            Caption: Language.Label.ShowReflection,
+            Func: () => {
+                window.SetProperty('Image.Reflect.Enable', Prop.Image.Reflect.Enable = !Prop.Image.Reflect.Enable);
+                on_size();
+                ImageLoader.clearCache();
+                Display.refresh();
+                Menu.build();
+            }
+        },
+        {
+            Flag: () => Prop.Image.Stretch ? MF_CHECKED : MF_UNCHECKED,
+            Caption: Language.Label.ImageStretching,
+            Func: () => {
+                window.SetProperty('Image.Stretch', Prop.Image.Stretch = !Prop.Image.Stretch);
+                Display.refresh();
+                Menu.build();
+            }
+        },
+        {
+            Flag: MF_STRING,
+            Caption: Language.Label.FollowCursor,
+            Sub: submenu_FollowCursor,
+            Radio: () => Prop.Panel.FollowCursor === 1 ? 0 : Prop.Panel.FollowCursor === 2 ? 1 : Prop.Panel.FollowCursor === 0 ? 2 : undefined  // radio number begin with 0
+        },
+        {
+            Flag: MF_SEPARATOR
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            Caption: Language.Label.RefreshImage,
+            Func: () => { Display.refresh(); }
+        },
+        {
+            Flag: MF_STRING,
+            Caption: Language.Label.ClearCache,
+            Func: () => {
+                ImageLoader.clearCache();
+                PathChecker.clearCache();
+            }
+        }
+    ];
+
+    const common = [
+        {
+            Flag: MF_SEPARATOR
+        },
+        {
+            Flag: MF_STRING,
+            Caption: Language.Label.Prop,
+            Func: () => { window.ShowProperties(); }
+        },
+        {
+            Flag: MF_STRING,
+            Caption: Language.Label.Help,
+            Func: () => { execCommand('https://ashiato1.blog.fc2.com/blog-entry-160.html'); }
+        },
+        {
+            Flag: () => Prop.Panel.HideConf ? null : MF_STRING,
+            Caption: Language.Label.Conf,
+            Func: () => { window.ShowConfigure(); }
+        }
+    ];
+
+    menu_smp_cover.push(...common);
+
+
+    //========
+    // menu_obj
+    //========
+    // Make id equal to property name
+    this.smp_cover = {
+        id: "smp_cover",
+        items: menu_smp_cover
+    };
+
+    //========
+    // build
+    //========
+    this.build = function (mobj) {
+        mobj = mobj || this.smp_cover;
+        _menu = buildMenu(mobj.items);
+        _item_list = buildMenu.item_list;
+        this.id = mobj.id;
+    };
+
+    this.show = function (x, y) {
+        Menu.isShown = true;
+        const item_list = _item_list; // メニュー表示中に_item_listの参照先が変わる可能性があるので参照を保持しておく
+        const ret = _menu.TrackPopupMenu(x, y);
+        //console2(ret);
+        if (ret !== 0) {
+            if (item_list[ret])
+                item_list[ret].Func();
+            else
+                item_list._context.ExecuteByID(ret - item_list._contextIdx);
+        }
+        (function () { Menu.isShown = false; }).timeout(10);
+    };
+
+    this.insertItems = function (id, index, items) {
+        const target = Menu[id];
+        let list, temp;
+        if (target instanceof Object && target.items instanceof Array) {
+            list = target.items;
+            if (index < 0)
+                index = Math.max(list.length + index + 1, 0);
+            else
+                index = Math.min(index, list.length);
+
+            temp = list.splice(index, list.length - index);
+            list.push(...items.concat(temp));
+        }
+    };
+
+    this.doCommandById = function (itemId) {
+        const item = _item_list[`id_${itemId}`];
+        if (item instanceof Object && item.Func instanceof Function)
+            item.Func();
+    };
+
+}();
+
+
+//========================
+//== onLoad ==============
+//========================
+
+(() => {
+    on_size();
+    on_playback_stop(0);
+    if (fb.IsPlaying)
+        on_playback_new_track(fb.GetNowPlaying());
+}).timeout(500); // Delay loading for stability
+
+
+//========================
+//= Callback Function ====
+//========================
+function on_paint(gr) {
+    if (isDragging)
+        gr.FillSolidRect(-1, -1, ww + 2, wh + 2, RGBA(193, 219, 252));
+    else if (Prop.Panel.BackgroundColor)
+        gr.FillSolidRect(-1, -1, ww + 2, wh + 2, Prop.Panel.BackgroundColor);
+    gr.SetSmoothingMode(2);
+    gr.SetInterpolationMode(7);
+
+    Display.onPaint(gr);
+}
+
+function on_size() {
+    if (!window.Width || !window.Height)
+        return;
+    ww = window.Width;
+    wh = window.Height;
+    Display.onResize(ww, wh);
+}
+
+function on_item_focus_change() {
+    if (Prop.Panel.FollowCursor === 2 || (Prop.Panel.FollowCursor === 1 && !fb.IsPlaying))
+        fb.GetFocusItem() && Controller.onNewTrack(fb.GetFocusItem(), true);
+}
+
+function on_playback_new_track(metadb) {
+    if (Prop.Panel.FollowCursor <= 1)
+        Controller.onNewTrack(metadb);
+}
+
+function on_playback_stop(reason) {
+    if (reason !== 2) {
+        if (Prop.Panel.FollowCursor === 0 || !fb.GetFocusItem())
+            Controller.onStop(reason);
+        else
+            on_item_focus_change();
+    }
+}
+
+function on_mouse_wheel(delta) {
+    if (delta > 0)
+        Controller.previous();
+    else
+        Controller.next();
+}
+
+function on_mouse_rbtn_up(x, y, mask) {
+    if (utils.IsKeyPressed(VK_SHIFT))
+        return;
+    else {
+        Menu.show(x, y);
+        return true; // prevent default menu
+    }
+}
+
+function on_mouse_lbtn_dblclk(x, y, mask) {
+    if (Controller.getCurrImgPaths().length)
+        Menu.doCommandById('OpenIn');
+}
+
+function on_mouse_mbtn_down(x, y, mask) {
+    if (Controller.getCurrImgPaths().length)
+        Menu.doCommandById('OpenIn');
+}
+
+function on_drag_enter(action) {
+    isDragging = true;
+    window.Repaint();
+
+    let playlist_name = '';
+    const metadb = fb.GetFocusItem();
+    if (!metadb)
+        playlist_name = Prop.Panel.DragDropToPlaylist;
+    else
+        playlist_name = fb.TitleFormat(Prop.Panel.DragDropToPlaylist).EvalWithMetadb(metadb);
+
+    action.Text = `Add To Playlist "${playlist_name || "New Playlist"}"`;
+}
+
+function on_drag_leave() {
+    isDragging = false;
+    window.Repaint();
+}
+
+function on_drag_drop(action) {
+    let playlist_name = '';
+    const metadb = fb.GetFocusItem();
+
+    if (!metadb) // TFを評価できないのでそのまま使用(foobar外からドロップかつプレイリストが空っぽ等)
+        playlist_name = Prop.Panel.DragDropToPlaylist;
+    else
+        playlist_name = fb.TitleFormat(Prop.Panel.DragDropToPlaylist).EvalWithMetadb(metadb);
+
+    let idx = -1;
+    for (let i = 0; i < plman.PlaylistCount; i++) {
+        if (plman.GetPlaylistName(i) === playlist_name) {
+            idx = i;
+            break;
+        }
+    }
+
+    if (idx === -1)
+        idx = plman.CreatePlaylist(plman.PlaylistCount, playlist_name);
+
+    on_drag_leave(); // on_drag_dropイベントの発生時にはon_drag_leaveが呼ばれない
+
+    action.Effect = 1; // 1:DROPEFFECT_COPY
+    action.Playlist = idx;
+    action.ToSelect = false;
+}
+
+//EOF
