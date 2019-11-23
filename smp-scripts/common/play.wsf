@@ -1,0 +1,20 @@
+﻿<job id="main">
+    <script language="JavaScript">
+    
+    if(WScript.Arguments.length === 2){
+        var url = WScript.Arguments(0);
+        var volume = WScript.Arguments(1);
+
+        var mp = new ActiveXObject('WMPlayer.OCX');
+        mp.settings.volume = volume;
+        mp.URL = url;
+        
+        while (mp.playState === 3 || mp.playState === 9) {
+            WScript.Sleep(50);
+        }
+
+        mp.close();
+    }
+
+    </script>
+</job>

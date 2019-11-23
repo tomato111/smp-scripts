@@ -1,4 +1,5 @@
 ﻿//created by tomato111
+
 //=======================
 //= Prototype ===========
 //=======================
@@ -323,6 +324,109 @@ Ini.prototype = {
     }
 };
 
+//-- Menu Builder --
+function CustomMenu() {
+
+    const registered = {};
+    let _menu, _item_list;
+
+    const buildMenu = function (items, parentMenu, flag, caption, radio) {
+        if (arguments.length === 1) buildMenu.init();
+
+        const _menu = window.CreatePopupMenu();
+        let start_idx = buildMenu.idx;
+        if (parentMenu)
+            _menu.AppendTo(parentMenu, flag, caption);
+        if (items instanceof Function) {
+            items(_menu, buildMenu.item_list);
+            return;
+        }
+        for (const item of items) {
+            const flag = (item.Flag instanceof Function) ? item.Flag() : item.Flag;
+            if (flag === null)
+                continue;
+            const caption = (item.Caption instanceof Function) ? item.Caption() : item.Caption;
+            const radio = (item.Radio instanceof Function) ? item.Radio() : item.Radio;
+            if (item.Sub) {
+                buildMenu(item.Sub, _menu, flag, caption, radio);
+                continue;
+            }
+            _menu.AppendMenuItem(flag, buildMenu.idx, caption);
+            buildMenu.item_list[buildMenu.idx++] = item;
+        }
+
+        isFinite(radio) && _menu.CheckMenuRadioItem(start_idx, buildMenu.idx - 1, start_idx + Number(radio));
+        return _menu;
+    };
+    buildMenu.init = function () {
+        this.item_list = {};
+        this.idx = 1;
+    };
+
+    this.defaultId = function () { };
+
+    this.register = function (mobj) {
+        const { id, items } = mobj;
+        if (id)
+            registered[id] = items;
+        items.filter((item) => item.ItemId).forEach((item) => {
+            registered[`itemId_${item.ItemId}`] = item;
+        });
+    };
+
+    this.build = function (mobj = {}) {
+        let { id, items } = mobj;
+        if (!items) {
+            if (registered[id])
+                items = registered[id];
+            else {
+                id = this.defaultId();
+                items = registered[id];
+            }
+        }
+        _menu = buildMenu(items);
+        _item_list = buildMenu.item_list;
+        this.id = id;
+        return { _menu, _item_list };
+    };
+
+    this.show = function (x, y) {
+        this.isShown = true;
+        const item_list = _item_list; // メニュー表示中に_item_listの参照先が変わる可能性があるので参照を保持
+        const ret = _menu.TrackPopupMenu(x, y);
+        if (ret !== 0) {
+            if (item_list[ret])
+                item_list[ret].Func instanceof Function && item_list[ret].Func();
+            else
+                item_list._context.ExecuteByID(ret - item_list._contextIdx);
+        }
+        (() => { this.isShown = false; }).timeout(10);
+    };
+
+    this.insertItems = function (id, index, items) {
+        const list = registered[id];
+        if (list instanceof Array) {
+            if (index < 0)
+                index = Math.max(list.length + index + 1, 0);
+            else
+                index = Math.min(index, list.length);
+
+            const temp = list.splice(index, list.length - index);
+            list.push(...items.concat(temp));
+        }
+    };
+
+    this.doCommandByItemId = function (itemId) {
+        const item = registered[`itemId_${itemId}`];
+        if (item instanceof Object && item.Func instanceof Function) {
+            const flag = (item.Flag instanceof Function) ? item.Flag() : item.Flag;
+            if (flag !== 1 && flag !== 2)
+                item.Func();
+        }
+    };
+
+}
+
 
 //=======================
 //= Function ============
@@ -377,14 +481,10 @@ function prompt(text, title, defaultText) {
     return sc.Run('fn', text, title, defaultText);
 }
 
-//-- Play Sound --
-function playSoundSimple(url, volume) {
-    try {
-        const mp = new ActiveXObject('WMPlayer.OCX');
-        mp.settings.volume = volume || 100;
-        mp.URL = url;
-        mp.Controls.Play();
-    } catch (e) { }
+//-- Play Sound -- Note: Spider Monkey Panel上で実行すると何故か不安定になりフリーズを誘発していたので中身をplay.wsfに移した
+function playSoundSimple(play_wsf, url, volume = 100) {
+    const ws = new ActiveXObject('WScript.Shell');
+    ws.Run(`"${play_wsf}" "${url}" "${volume}"`);
 }
 
 //-- Execute Command --
@@ -403,7 +503,7 @@ function execCommand(path) {
         fb.RunMainMenuCommand(path);
 }
 
-function execCommands(commands, MetadbHandle) { // c= a command string or commands array
+function execCommands(commands, metadb) { // c= a command string or commands array
     if (commands instanceof Array)
         commands.forEach(ex);
     else
@@ -413,17 +513,19 @@ function execCommands(commands, MetadbHandle) { // c= a command string or comman
         if (c.charAt(0) === '<')
             window.NotifyOthers(c.slice(1, -1), '');
         else
-            execCommand(fb.TitleFormat(c).EvalWithMetadb(MetadbHandle));
+            execCommand(fb.TitleFormat(c).EvalWithMetadb(metadb));
     }
 }
 
 //-- IOFunc --
 function createFolder(folder, fs) {
     if (!fs) fs = new ActiveXObject('Scripting.FileSystemObject');
+    if (fs.FolderExists(folder))
+        return;
     try {
         const parent = fs.GetParentFolderName(folder);
         if (!fs.FolderExists(parent))
-            arguments.callee(parent, fs);
+            createFolder(parent, fs);
         fs.CreateFolder(folder);
     } catch (e) { throw new Error("Couldn't create a folder. " + folder); }
 }
@@ -480,7 +582,7 @@ function readTextFile(file, charset) {
         }
         stm.Position = 0;
         stm.Type = 2; //adTypeText
-        stm.Charset = arguments.callee.lastCharset = charset || GetCharsetFromCodepage(utils.FileTest(file, 'chardet'));
+        stm.Charset = readTextFile.lastCharset = charset || GetCharsetFromCodepage(utils.FileTest(file, 'chardet'));
         str = stm.ReadText(-1); // _autodetect_allでの一行ごとの取得はまともに動かない
     } catch (e) {
         throw new Error("Couldn't open a file.\nIt has most likely been moved, renamed, or deleted.");
@@ -547,7 +649,7 @@ function getHTML(data, method, file, async, depth, onLoaded, header) {
         }
     };
 
-    if (header) /* HINT: If the cache is in trouble, use { 'If-Modified-Since': 'Thu, 01 Jun 1970 00:00:00 GMT' } */
+    if (header) /* Hint: If the cache is in trouble, use { 'If-Modified-Since': 'Thu, 01 Jun 1970 00:00:00 GMT' } */
         for (const name in header) {
             request.setRequestHeader(name, header[name]);
         }
@@ -559,15 +661,15 @@ function getHTML(data, method, file, async, depth, onLoaded, header) {
 }
 
 //-- Metadb --
-function writeTagField(text, field, MetadbHandle) {
-    const att = new ActiveXObject('Scripting.FileSystemObject').getFile(MetadbHandle.Path).Attributes;
+function writeTagField(text, field, metadb) {
+    const att = new ActiveXObject('Scripting.FileSystemObject').GetFile(metadb.Path).Attributes;
     if (att & 1) // 1 means ReadOnly
         throw new Error('The file is read-only');
 
     const obj = {};
     obj[field] = text;
     const handles = fb.CreateHandleList();
-    handles.Add(MetadbHandle);
+    handles.Add(metadb);
     handles.UpdateFileInfoFromJSON(JSON.stringify(obj));
 }
 
@@ -667,41 +769,6 @@ function getLineFeedCode(str) {
         else if (LF) return '\n';
         else return;
 }
-
-//-- Build Menu --
-function buildMenu(items, parentMenu, flag, caption, radio) {
-    if (arguments.length === 1) buildMenu.init();
-
-    const _menu = window.CreatePopupMenu();
-    let start_idx = buildMenu.idx;
-    if (parentMenu)
-        _menu.AppendTo(parentMenu, flag, caption);
-    if (items instanceof Function) {
-        items(_menu);
-        return;
-    }
-    for (let i = 0; i < items.length; i++) {
-        let flag = (items[i].Flag instanceof Function) ? items[i].Flag() : items[i].Flag;
-        let caption = (items[i].Caption instanceof Function) ? items[i].Caption() : items[i].Caption;
-        let radio = (items[i].Radio instanceof Function) ? items[i].Radio() : items[i].Radio;
-        if (flag === null) continue;
-        if (items[i].Sub) {
-            arguments.callee(items[i].Sub, _menu, flag, caption, radio);
-            continue;
-        }
-        _menu.AppendMenuItem(flag, buildMenu.idx, caption);
-        buildMenu.item_list[buildMenu.idx++] = items[i];
-        if (items[i].ItemId)
-            buildMenu.item_list[`id_${items[i].ItemId}`] = items[i];
-    }
-
-    isFinite(radio) && _menu.CheckMenuRadioItem(start_idx, buildMenu.idx - 1, start_idx + Number(radio));
-    return _menu;
-}
-buildMenu.init = function () {
-    this.item_list = {};
-    this.idx = 1;
-};
 
 //-- Get Charset From Codepage --
 function GetCharsetFromCodepage(codepage) {

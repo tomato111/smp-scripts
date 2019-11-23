@@ -12,7 +12,7 @@ include(fb.ProfilePath + 'smp-scripts\\common\\lib.js');
 
 const fs = new ActiveXObject('Scripting.FileSystemObject'); // File System Object
 const ws = new ActiveXObject('WScript.Shell'); // WScript Shell Object
-const scriptName = "smp-cover";
+const scriptName = 'smp-cover';
 const scriptDir = fb.ProfilePath + 'smp-scripts\\smp-cover\\';
 const MF_SEPARATOR = 0x00000800;
 const MF_STRING = 0x00000000;
@@ -35,21 +35,26 @@ const Prop = new function () {
     const allowedValue = (val, type, min, max, def) => {
         if (typeof val !== type)
             val = def;
-        else if (val < min)
-            val = min;
-        else if (val > max)
-            val = max;
-
+        else if (type === "number") {
+            if (val < min)
+                val = min;
+            else if (val > max)
+                val = max;
+        }
+        else if (type === "string") {
+            if (!val)
+                val = def;
+        }
         return val;
     };
 
-    //--------------------
+    //==Panel====
     this.Panel = {
         Path: window.GetProperty('Panel.Path', '<front>||<back>||$directory_path(%path%)\\*.*'), // Separate paths by "||"
         FollowCursor: window.GetProperty('Panel.FollowCursor', 1), // 0: Never, 1: When not playing, 2: Always
         Lang: window.GetProperty('Panel.Language', '').toLowerCase(),
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
-        HideConf: window.GetProperty("Panel.HideConfigureMenu", false),
+        HideConf: window.GetProperty('Panel.HideConfigureMenu', false),
         BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,0)'),
         DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items') // Add dropped items to playlist. TitleFormatting is available
     };
@@ -60,7 +65,7 @@ const Prop = new function () {
         this.Panel.BackgroundColor = eval(RegExp.lastMatch);
 
 
-    //--------------------
+    //==Cycle====
     this.Cycle = {
         Pause: window.GetProperty('Cycle.Pause', false),
         Interval: window.GetProperty('Cycle.Interval', 10000),
@@ -76,7 +81,7 @@ const Prop = new function () {
     window.SetProperty('Cycle.Shuffle', this.Cycle.Shuffle = allowedValue(this.Cycle.Shuffle, 'number', 0, Infinity, 0));
 
 
-    //--------------------
+    //==Image====
     this.Image = {
         NoCoverPath: window.GetProperty('Image.NoCoverPath', ''),
         Stretch: window.GetProperty('Image.Stretch', false),
@@ -90,7 +95,7 @@ const Prop = new function () {
             FixedSize: window.GetProperty('Image.Case.FixedSize', '0,0,ww,wh') // Separate with comma, like "0,0,200,150". (x,y,w,h)
         },
         Reflect: {
-            Enable: window.GetProperty('Image.Reflect.Enable', false),
+            Enable: window.GetProperty('Image.Reflect.Enable', true),
             Ratio: window.GetProperty('Image.Reflect.Ratio', 0.15),
             Distance: window.GetProperty('Image.Reflect.Distance', 6)
         }
@@ -114,7 +119,7 @@ const Prop = new function () {
 //= Load Language =======
 //=======================
 
-const Language = {
+const Lang = {
 
     Messages: {},
     Label: {},
@@ -160,7 +165,7 @@ const Language = {
     }
 };
 
-Language.load(scriptDir + 'languages\\');
+Lang.load(scriptDir + 'languages\\');
 
 
 //========================
@@ -208,18 +213,13 @@ const ImageLoader = new function () {
         if (!path) return;
 
         const artIdRE = [/>front>$/, />back>$/, />disc>$/, />icon>$/, />artist>$/];
-        let art_id = 0;
         let result = ImgsCache.SearchFor(path, noCache);
         let img, reflImg;
 
         if (!result) {
             if (path.startsWith('<')) { // Embed image
-                for (let i = 0; i < artIdRE.length; i++) {
-                    if (artIdRE[i].test(path)) {
-                        art_id = i; break;
-                    }
-                }
-                img = utils.GetAlbumArtEmbedded(path.match(/^<(.+?)>/)[1], art_id);
+                const art_id = artIdRE.findIndex((re) => re.test(path));
+                img = utils.GetAlbumArtEmbedded(path.match(/^<(.+?)>/)[1], Math.max(art_id, 0));
             }
             else
                 img = gdi.Image(path);
@@ -291,8 +291,7 @@ const PathChecker = new function () {
 
         const src_arr = allImgFilePaths.srcStr.split('||');
 
-        for (let i = 0; i < src_arr.length; i++) {
-            const src = src_arr[i];
+        for (const src of src_arr) {
             let results = PathsCache.SearchFor(src);
             if (!results.length) {
                 if (src.startsWith('<')) { // embed cover
@@ -345,6 +344,8 @@ const Display = new function () {
     let currReflImg, newReflImg, caseFixedSize;
 
     const onTimer = () => {
+        if (!newImg)
+            return;
         if (opacity > 0) {
             opacity = Math.max(opacity - step, 0);
         } else {
@@ -475,13 +476,10 @@ const Controller = new function () {
                 currImgPaths.splice(currImgIdx, 1); // 表示出来なかったパスは削除
                 changeImg(); // retry
             }
-            else
-                Menu.build();
         }
         else {
             currImgPath = noCoverPath;
             Display.changeImage(currImgPath);
-            Menu.build();
         }
     };
 
@@ -564,42 +562,38 @@ const Controller = new function () {
 //========================
 //= Define Menu Object ===
 //========================
-const Menu = new function () {
+const Menu = new CustomMenu();
 
-    let _menu, _item_list;
-
+(() => {
     //============
     // sub menu items
     //============
     const submenu_FollowCursor = [ // radio item
         {
-            Caption: Language.Label.FC_WhenNotPlaying,
+            Caption: Lang.Label.FC_WhenNotPlaying,
             Func: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 1);
                 if (fb.IsPlaying)
                     on_playback_new_track(fb.GetNowPlaying());
                 else
                     on_item_focus_change();
-                Menu.build();
             }
         },
         {
-            Caption: Language.Label.FC_Always,
+            Caption: Lang.Label.FC_Always,
             Func: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 2);
                 on_item_focus_change();
-                Menu.build();
             }
         },
         {
-            Caption: Language.Label.FC_Never,
+            Caption: Lang.Label.FC_Never,
             Func: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 0);
                 if (fb.IsPlaying)
                     on_playback_new_track(fb.GetNowPlaying());
                 else
                     on_playback_stop(0);
-                Menu.build();
             }
         }
     ];
@@ -610,25 +604,22 @@ const Menu = new function () {
     const menu_smp_cover = [
         {
             Flag: MF_STRING,
-            Caption: () => Prop.Cycle.Pause ? Language.Label.ResumeCycle : Language.Label.PauseCycle,
-            Func: () => {
-                Prop.Cycle.Pause ? Controller.play() : Controller.pause();
-                Menu.build();
-            }
+            Caption: () => Prop.Cycle.Pause ? Lang.Label.ResumeCycle : Lang.Label.PauseCycle,
+            Func: () => { Prop.Cycle.Pause ? Controller.play() : Controller.pause(); }
         },
         {
             Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.FirstImage,
+            Caption: Lang.Label.FirstImage,
             Func: () => { Controller.first(); }
         },
         {
             Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.LastImage,
+            Caption: Lang.Label.LastImage,
             Func: () => { Controller.last(); }
         },
         {
             Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.OpenIn,
+            Caption: Lang.Label.OpenIn,
             Func: () => {
                 let path = Controller.getCurrImgPath();
                 if (path.startsWith('<')) {
@@ -638,7 +629,7 @@ const Menu = new function () {
                         else
                             path = fb.TitleFormat(Prop.Image.SubstitutedPath).Eval();
 
-                        Language.Messages.info_EmbedImage.fbpopup();
+                        Lang.Messages.info_EmbedImage.fbpopup();
                     }
                     else
                         path = null;
@@ -651,11 +642,11 @@ const Menu = new function () {
                         execCommand(`"${Prop.Panel.ViewerPath}" ${path}`);
                 }
             },
-            ItemId: "OpenIn"
+            ItemId: 'OpenIn'
         },
         {
             Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.OpenFolder,
+            Caption: Lang.Label.OpenFolder,
             Func: () => {
                 const path = Controller.getCurrImgPath();
                 execCommand('explorer.exe /select,' + path.match(/^<?([^>]+)/)[1]);
@@ -666,7 +657,7 @@ const Menu = new function () {
         },
         {
             Flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.DeleteImage,
+            Caption: Lang.Label.DeleteImage,
             Func: () => {
                 sendToRecycleBin(Controller.getCurrImgPath());
                 Display.refresh(); // キャッシュから削除
@@ -678,36 +669,33 @@ const Menu = new function () {
         },
         {
             Flag: () => Prop.Image.Case.Enable ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Language.Label.ShowCase,
+            Caption: Lang.Label.ShowCase,
             Func: () => {
                 window.SetProperty('Image.Case.Enable', Prop.Image.Case.Enable = !Prop.Image.Case.Enable);
                 window.Repaint();
-                Menu.build();
             }
         },
         {
             Flag: () => Prop.Image.Reflect.Enable ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Language.Label.ShowReflection,
+            Caption: Lang.Label.ShowReflection,
             Func: () => {
                 window.SetProperty('Image.Reflect.Enable', Prop.Image.Reflect.Enable = !Prop.Image.Reflect.Enable);
                 on_size();
                 ImageLoader.clearCache();
                 Display.refresh();
-                Menu.build();
             }
         },
         {
             Flag: () => Prop.Image.Stretch ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Language.Label.ImageStretching,
+            Caption: Lang.Label.ImageStretching,
             Func: () => {
                 window.SetProperty('Image.Stretch', Prop.Image.Stretch = !Prop.Image.Stretch);
                 Display.refresh();
-                Menu.build();
             }
         },
         {
             Flag: MF_STRING,
-            Caption: Language.Label.FollowCursor,
+            Caption: Lang.Label.FollowCursor,
             Sub: submenu_FollowCursor,
             Radio: () => Prop.Panel.FollowCursor === 1 ? 0 : Prop.Panel.FollowCursor === 2 ? 1 : Prop.Panel.FollowCursor === 0 ? 2 : undefined  // radio number begin with 0
         },
@@ -716,98 +704,49 @@ const Menu = new function () {
         },
         {
             Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Language.Label.RefreshImage,
+            Caption: Lang.Label.RefreshImage,
             Func: () => { Display.refresh(); }
         },
         {
             Flag: MF_STRING,
-            Caption: Language.Label.ClearCache,
+            Caption: Lang.Label.ClearCache,
             Func: () => {
                 ImageLoader.clearCache();
                 PathChecker.clearCache();
             }
-        }
-    ];
-
-    const common = [
+        },
         {
             Flag: MF_SEPARATOR
         },
         {
             Flag: MF_STRING,
-            Caption: Language.Label.Prop,
+            Caption: Lang.Label.Prop,
             Func: () => { window.ShowProperties(); }
         },
         {
             Flag: MF_STRING,
-            Caption: Language.Label.Help,
+            Caption: Lang.Label.Help,
             Func: () => { execCommand('https://ashiato1.blog.fc2.com/blog-entry-160.html'); }
         },
         {
             Flag: () => Prop.Panel.HideConf ? null : MF_STRING,
-            Caption: Language.Label.Conf,
+            Caption: Lang.Label.Conf,
             Func: () => { window.ShowConfigure(); }
         }
     ];
 
-    menu_smp_cover.push(...common);
-
 
     //========
-    // menu_obj
+    // resister
     //========
-    // Make id equal to property name
-    this.smp_cover = {
-        id: "smp_cover",
+    Menu.register({
+        id: 'smp-cover',
         items: menu_smp_cover
-    };
+    });
 
-    //========
-    // build
-    //========
-    this.build = function (mobj) {
-        mobj = mobj || this.smp_cover;
-        _menu = buildMenu(mobj.items);
-        _item_list = buildMenu.item_list;
-        this.id = mobj.id;
-    };
+    Menu.defaultId = () => 'smp-cover';
 
-    this.show = function (x, y) {
-        Menu.isShown = true;
-        const item_list = _item_list; // メニュー表示中に_item_listの参照先が変わる可能性があるので参照を保持しておく
-        const ret = _menu.TrackPopupMenu(x, y);
-        //console2(ret);
-        if (ret !== 0) {
-            if (item_list[ret])
-                item_list[ret].Func();
-            else
-                item_list._context.ExecuteByID(ret - item_list._contextIdx);
-        }
-        (function () { Menu.isShown = false; }).timeout(10);
-    };
-
-    this.insertItems = function (id, index, items) {
-        const target = Menu[id];
-        let list, temp;
-        if (target instanceof Object && target.items instanceof Array) {
-            list = target.items;
-            if (index < 0)
-                index = Math.max(list.length + index + 1, 0);
-            else
-                index = Math.min(index, list.length);
-
-            temp = list.splice(index, list.length - index);
-            list.push(...items.concat(temp));
-        }
-    };
-
-    this.doCommandById = function (itemId) {
-        const item = _item_list[`id_${itemId}`];
-        if (item instanceof Object && item.Func instanceof Function)
-            item.Func();
-    };
-
-}();
+})();
 
 
 //========================
@@ -819,7 +758,7 @@ const Menu = new function () {
     on_playback_stop(0);
     if (fb.IsPlaying)
         on_playback_new_track(fb.GetNowPlaying());
-}).timeout(500); // Delay loading for stability
+}).timeout(200); // Delay loading for stability
 
 
 //========================
@@ -874,19 +813,18 @@ function on_mouse_rbtn_up(x, y, mask) {
     if (utils.IsKeyPressed(VK_SHIFT))
         return;
     else {
+        Menu.build();
         Menu.show(x, y);
         return true; // prevent default menu
     }
 }
 
 function on_mouse_lbtn_dblclk(x, y, mask) {
-    if (Controller.getCurrImgPaths().length)
-        Menu.doCommandById('OpenIn');
+    Menu.doCommandByItemId('OpenIn');
 }
 
 function on_mouse_mbtn_down(x, y, mask) {
-    if (Controller.getCurrImgPaths().length)
-        Menu.doCommandById('OpenIn');
+    Menu.doCommandByItemId('OpenIn');
 }
 
 function on_drag_enter(action) {
@@ -900,7 +838,7 @@ function on_drag_enter(action) {
     else
         playlist_name = fb.TitleFormat(Prop.Panel.DragDropToPlaylist).EvalWithMetadb(metadb);
 
-    action.Text = `Add To Playlist "${playlist_name || "New Playlist"}"`;
+    action.Text = `Add To Playlist "${playlist_name || 'New Playlist'}"`;
 }
 
 function on_drag_leave() {
