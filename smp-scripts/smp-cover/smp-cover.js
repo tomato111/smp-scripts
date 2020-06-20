@@ -2,7 +2,7 @@
 
 window.DefinePanel('smp-cover',
     {
-        version: '1.0.0',
+        version: '1.1.0',
         author: 'tomato111',
         features: { drag_n_drop: true }
     }
@@ -56,7 +56,9 @@ const Prop = new function () {
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
         HideConf: window.GetProperty('Panel.HideConfigureMenu', false),
         BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,0)'),
-        DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items') // Add dropped items to playlist. TitleFormatting is available
+        DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items'), // Add dropped items to playlist. TitleFormatting is available
+        ExcludeFileName: window.GetProperty('Panel.ExcludeFileName', '').split('||').map(name => name.toLowerCase()), // Separate paths by "||"
+        FilerCommand: window.GetProperty('Panel.FilerCommand', '')
     };
 
     window.SetProperty('Panel.FollowCursor', this.Panel.FollowCursor = allowedValue(this.Panel.FollowCursor, 'number', 0, 2, 1));
@@ -383,7 +385,7 @@ const Display = new function () {
     };
 
     this.refresh = function () {
-        const result = ImageLoader.getImg(currImgPath, width, height, true);
+        const result = ImageLoader.getImg(currImgPath, width, height, true); // fourth arg: no cache
         if (result) {
             onTimer.clearInterval();
             newImg = newSize = newReflImg = null;
@@ -528,7 +530,8 @@ const Controller = new function () {
         const newImgPaths = PathChecker.getImgFilePaths(Prop.Panel.Path, metadb);
 
         if (currImgPaths.srcStr !== newImgPaths.srcStr) {
-            currImgPaths = newImgPaths;
+            currImgPaths = newImgPaths.filter(path => !Prop.Panel.ExcludeFileName.includes(path.split('\\').pop().toLowerCase()));
+            currImgPaths.srcStr = newImgPaths.srcStr;
             Prop.Cycle.Shuffle && shuffleArray(currImgPaths, Prop.Cycle.Shuffle - 1);
             resetTimer();
             changeImg(-2);
@@ -565,39 +568,6 @@ const Controller = new function () {
 const Menu = new CustomMenu();
 
 (() => {
-    //============
-    // sub menu items
-    //============
-    const submenu_FollowCursor = [ // radio item
-        {
-            Caption: Lang.Label.FC_WhenNotPlaying,
-            Func: () => {
-                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 1);
-                if (fb.IsPlaying)
-                    on_playback_new_track(fb.GetNowPlaying());
-                else
-                    on_item_focus_change();
-            }
-        },
-        {
-            Caption: Lang.Label.FC_Always,
-            Func: () => {
-                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 2);
-                on_item_focus_change();
-            }
-        },
-        {
-            Caption: Lang.Label.FC_Never,
-            Func: () => {
-                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 0);
-                if (fb.IsPlaying)
-                    on_playback_new_track(fb.GetNowPlaying());
-                else
-                    on_playback_stop(0);
-            }
-        }
-    ];
-
     //=============
     // main menu items
     //=============
@@ -619,7 +589,7 @@ const Menu = new CustomMenu();
         },
         {
             Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.OpenIn,
+            Caption: Lang.Label.OpenWithViewer,
             Func: () => {
                 let path = Controller.getCurrImgPath();
                 if (path.startsWith('<')) {
@@ -642,26 +612,59 @@ const Menu = new CustomMenu();
                         execCommand(`"${Prop.Panel.ViewerPath}" ${path}`);
                 }
             },
-            ItemId: 'OpenIn'
+            ItemId: 'OpenWithViewer'
+        },
+        {
+            Flag: () => Prop.Panel.FilerCommand ? (Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED) : null,
+            Caption: Lang.Label.OpenWithFiler,
+            Func: () => {
+                const path = Controller.getCurrImgPath().match(/^(?:<file:\/\/)?([^>]+)/)[1];
+                execCommand(Prop.Panel.FilerCommand.replace(/\${imgPath}/g, path));
+            }
         },
         {
             Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
             Caption: Lang.Label.OpenFolder,
             Func: () => {
-                const path = Controller.getCurrImgPath();
-                execCommand('explorer.exe /select,' + path.match(/^<?([^>]+)/)[1]);
+                const path = Controller.getCurrImgPath().match(/^(?:<file:\/\/)?([^>]+)/)[1];
+                execCommand('explorer.exe /select,' + path);
             }
         },
         {
             Flag: MF_SEPARATOR
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.DeleteImage,
+            Flag: MF_GRAYED,
+            Caption: Lang.Label.FollowCursor
+        },
+        {
+            Flag: () => Prop.Panel.FollowCursor === 1 ? MF_CHECKED : MF_UNCHECKED,
+            Caption: '  ' + Lang.Label.FC_WhenNotPlaying,
             Func: () => {
-                sendToRecycleBin(Controller.getCurrImgPath());
-                Display.refresh(); // キャッシュから削除
-                Controller.next();
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 1);
+                if (fb.IsPlaying)
+                    on_playback_new_track(fb.GetNowPlaying());
+                else
+                    on_item_focus_change();
+            }
+        },
+        {
+            Flag: () => Prop.Panel.FollowCursor === 2 ? MF_CHECKED : MF_UNCHECKED,
+            Caption: '  ' + Lang.Label.FC_Always,
+            Func: () => {
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 2);
+                on_item_focus_change();
+            }
+        },
+        {
+            Flag: () => Prop.Panel.FollowCursor === 0 ? MF_CHECKED : MF_UNCHECKED,
+            Caption: '  ' + Lang.Label.FC_Never,
+            Func: () => {
+                window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 0);
+                if (fb.IsPlaying)
+                    on_playback_new_track(fb.GetNowPlaying());
+                else
+                    on_playback_stop(0);
             }
         },
         {
@@ -694,10 +697,16 @@ const Menu = new CustomMenu();
             }
         },
         {
-            Flag: MF_STRING,
-            Caption: Lang.Label.FollowCursor,
-            Sub: submenu_FollowCursor,
-            Radio: () => Prop.Panel.FollowCursor === 1 ? 0 : Prop.Panel.FollowCursor === 2 ? 1 : Prop.Panel.FollowCursor === 0 ? 2 : undefined  // radio number begin with 0
+            Flag: MF_SEPARATOR
+        },
+        {
+            Flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
+            Caption: Lang.Label.DeleteImage,
+            Func: () => {
+                sendToRecycleBin(Controller.getCurrImgPath());
+                Display.refresh(); // キャッシュから削除
+                Controller.next();
+            }
         },
         {
             Flag: MF_SEPARATOR
@@ -820,11 +829,11 @@ function on_mouse_rbtn_up(x, y, mask) {
 }
 
 function on_mouse_lbtn_dblclk(x, y, mask) {
-    Menu.doCommandByItemId('OpenIn');
+    Menu.doCommandByItemId('OpenWithViewer');
 }
 
 function on_mouse_mbtn_down(x, y, mask) {
-    Menu.doCommandByItemId('OpenIn');
+    Menu.doCommandByItemId('OpenWithViewer');
 }
 
 function on_drag_enter(action) {

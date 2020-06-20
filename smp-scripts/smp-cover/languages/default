@@ -9,7 +9,8 @@
 	PauseCycle =  Pause cycle
 	FirstImage = First image
 	LastImage = Last image
-	OpenIn = Open with viewer
+	OpenWithViewer = Open with viewer
+	OpenWithFiler = Open with filer
 	OpenFolder = Open folder
 	DeleteImage = Delete current image
 	ShowCase = Show case image
