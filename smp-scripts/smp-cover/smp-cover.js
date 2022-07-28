@@ -2,7 +2,7 @@
 
 window.DefinePanel('smp-cover',
     {
-        version: '1.1.0',
+        version: '1.1.1',
         author: 'tomato111',
         features: { drag_n_drop: true }
     }
@@ -55,7 +55,7 @@ const Prop = new function () {
         Lang: window.GetProperty('Panel.Language', '').toLowerCase(),
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
         HideConf: window.GetProperty('Panel.HideConfigureMenu', false),
-        BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,0)'),
+        BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,255)'),
         DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items'), // Add dropped items to playlist. TitleFormatting is available
         ExcludeFileName: window.GetProperty('Panel.ExcludeFileName', '').split('||').map(name => name.toLowerCase()), // Separate paths by "||"
         FilerCommand: window.GetProperty('Panel.FilerCommand', '')
@@ -89,6 +89,8 @@ const Prop = new function () {
         Stretch: window.GetProperty('Image.Stretch', false),
         Margin: window.GetProperty('Image.Margin', '6,6,6,6'), // Margin between Panel and Image
         SubstitutedPath: window.GetProperty('Image.SubstitutedPath', ''), // Open substituted path when do 'View With External Viewer' on embed cover
+        AlignLeft: window.GetProperty('Image.AlignLeft', false),
+        AlignBottom: window.GetProperty('Image.AlignBottom', false),
         Case: {
             Enable: window.GetProperty('Image.Case.Enable', true),
             AdjustSize: window.GetProperty('Image.Case.AdjustSize', '4,4,4,4'), // Relative with cover image. Separate with comma, like "5,5,5,5". (left,up,right,down)
@@ -375,8 +377,10 @@ const Display = new function () {
             currImgPath = path;
             newImg = result.img;
             newSize = calcImgSize(result.img, width, height, Prop.Image.Stretch); // キャッシュから取得した場合は必ずしもGetImgで指定したサイズで返ってくる訳ではないので表示用に計算する
-            if (Prop.Image.Reflect.Enable)
+            if (Prop.Image.Reflect.Enable || Prop.Image.AlignBottom)
                 newSize.y *= 2; // set to bottom alignment
+            if (Prop.Image.AlignLeft)
+                newSize.x = 0;
             newReflImg = result.reflImg;
             opacity = 255;
             onTimer.interval(refreshInterval);
@@ -392,8 +396,10 @@ const Display = new function () {
             opacity = 255;
             currImg = result.img;
             currSize = calcImgSize(result.img, width, height, Prop.Image.Stretch);
-            if (Prop.Image.Reflect.Enable)
+            if (Prop.Image.Reflect.Enable || Prop.Image.AlignBottom)
                 currSize.y *= 2; // set to bottom alignment
+            if (Prop.Image.AlignLeft)
+                currSize.x = 0;
             currReflImg = result.reflImg;
             window.Repaint();
         }
@@ -407,13 +413,17 @@ const Display = new function () {
 
         if (currImg) {
             currSize = calcImgSize(currImg, width, height, Prop.Image.Stretch);
-            if (Prop.Image.Reflect.Enable)
+            if (Prop.Image.Reflect.Enable || Prop.Image.AlignBottom)
                 currSize.y *= 2; // set to bottom alignment
+            if (Prop.Image.AlignLeft)
+                currSize.x = 0;
         }
         if (newImg) {
             newSize = calcImgSize(newImg, width, height, Prop.Image.Stretch);
-            if (Prop.Image.Reflect.Enable)
+            if (Prop.Image.Reflect.Enable || Prop.Image.AlignBottom)
                 newSize.y *= 2; // set to bottom alignment
+            if (Prop.Image.AlignLeft)
+                newSize.x = 0;
         }
 
         caseFixedSize = Prop.Image.Case.FixedSize.split(/\s*,\s*/).map((item) => item.replace('ww', ww).replace('wh', wh));
@@ -693,6 +703,22 @@ const Menu = new CustomMenu();
             Caption: Lang.Label.ImageStretching,
             Func: () => {
                 window.SetProperty('Image.Stretch', Prop.Image.Stretch = !Prop.Image.Stretch);
+                Display.refresh();
+            }
+        },
+        {
+            Flag: () => Prop.Image.AlignLeft ? MF_CHECKED : MF_UNCHECKED,
+            Caption: Lang.Label.AlignLeft,
+            Func: () => {
+                window.SetProperty('Image.AlignLeft', Prop.Image.AlignLeft = !Prop.Image.AlignLeft);
+                Display.refresh();
+            }
+        },
+        {
+            Flag: () => Prop.Image.AlignBottom ? MF_CHECKED : MF_UNCHECKED,
+            Caption: Lang.Label.AlignBottom,
+            Func: () => {
+                window.SetProperty('Image.AlignBottom', Prop.Image.AlignBottom = !Prop.Image.AlignBottom);
                 Display.refresh();
             }
         },

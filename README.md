@@ -7,6 +7,7 @@ https://github.com/TheQwertiest/foo_spider_monkey_panel/releases
 # Installation
 https://ashiato1.blog.fc2.com/blog-entry-160.html
 
+Configure panel -> 'Script' tab -> 'In-memory' box -> 'Edit script...' button
 ### Each script field
 >include(fb.ProfilePath + 'smp-scripts\\smp-cover\\smp-cover.js');
 

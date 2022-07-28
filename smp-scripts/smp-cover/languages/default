@@ -16,6 +16,8 @@
 	ShowCase = Show case image
 	ShowReflection = Show reflection
 	ImageStretching = Stretch image
+	AlignLeft = Align left
+	AlignBottom = Align Bottom
 	FollowCursor = Follow cursor
 	FC_WhenNotPlaying = Only when not playing
 	FC_Always = Always
