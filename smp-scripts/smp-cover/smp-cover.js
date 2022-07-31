@@ -1,4 +1,4 @@
-﻿//== code for foo_spider_monkey_panel v1.2.2 or higher ==
+﻿//== code for foo_spider_monkey_panel v1.6.1 or higher ==
 
 window.DefinePanel('smp-cover',
     {
@@ -54,7 +54,6 @@ const Prop = new function () {
         FollowCursor: window.GetProperty('Panel.FollowCursor', 1), // 0: Never, 1: When not playing, 2: Always
         Lang: window.GetProperty('Panel.Language', '').toLowerCase(),
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
-        HideConf: window.GetProperty('Panel.HideConfigureMenu', false),
         BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,255)'),
         DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items'), // Add dropped items to playlist. TitleFormatting is available
         ExcludeFileName: window.GetProperty('Panel.ExcludeFileName', '').split('||').map(name => name.toLowerCase()), // Separate paths by "||"
@@ -762,11 +761,6 @@ const Menu = new CustomMenu();
             Flag: MF_STRING,
             Caption: Lang.Label.Help,
             Func: () => { execCommand('https://ashiato1.blog.fc2.com/blog-entry-160.html'); }
-        },
-        {
-            Flag: () => Prop.Panel.HideConf ? null : MF_STRING,
-            Caption: Lang.Label.Conf,
-            Func: () => { window.ShowConfigure(); }
         }
     ];
 
