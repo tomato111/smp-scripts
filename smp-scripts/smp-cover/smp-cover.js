@@ -2,7 +2,7 @@
 
 window.DefinePanel('smp-cover',
     {
-        version: '1.1.1',
+        version: '1.1.2',
         author: 'tomato111',
         features: { drag_n_drop: true }
     }
@@ -23,8 +23,10 @@ const VK_SHIFT = 0x10;
 const VK_CONTROL = 0x11;
 const VK_ALT = 0x12;
 
-let ww, wh;
+let isLoaded = false;
+let isInitialized = false;
 let isDragging = false;
+let ww, wh;
 
 
 //=======================
@@ -229,10 +231,8 @@ const ImageLoader = new function () {
 
 
             if (img) {
-                if (dstW && dstH) { // キャッシュに格納する前にリサイズ
-                    const size = calcImgSize(img, dstW, dstH, Prop.Image.Stretch);
-                    img = img.Resize(size.width, size.height, 7);
-                }
+                const size = calcImgSize(img, dstW, dstH, Prop.Image.Stretch);
+                img = img.Resize(size.width, size.height, 7); // キャッシュに格納する前にリサイズ
                 if (Prop.Image.Reflect.Enable)
                     reflImg = createReflImg(img, dstH);
                 result = { path, img, reflImg };
@@ -731,7 +731,8 @@ const Menu = new CustomMenu();
                 sendToRecycleBin(Controller.getCurrImgPath());
                 Display.refresh(); // キャッシュから削除
                 Controller.next();
-            }
+            },
+            ItemId: 'DeleteImage'
         },
         {
             Flag: MF_SEPARATOR
@@ -783,10 +784,9 @@ const Menu = new CustomMenu();
 //========================
 
 (() => {
+    window.DlgCode = 0x0004;
+    isLoaded = true;
     on_size();
-    on_playback_stop(0);
-    if (fb.IsPlaying)
-        on_playback_new_track(fb.GetNowPlaying());
 }).timeout(200); // Delay loading for stability
 
 
@@ -805,24 +805,40 @@ function on_paint(gr) {
 }
 
 function on_size() {
-    if (!window.Width || !window.Height)
+    if (!isLoaded || !window.Width || !window.Height)
         return;
+    let initFlag;
+    if (!ww || !wh)
+        initFlag = true;
+
     ww = window.Width;
     wh = window.Height;
     Display.onResize(ww, wh);
+    if (initFlag) {
+        isInitialized = true;
+        on_playback_stop(0);
+        if (fb.IsPlaying)
+            on_playback_new_track(fb.GetNowPlaying());
+    }
 }
 
 function on_item_focus_change() {
+    if (!isInitialized)
+        return;
     if (Prop.Panel.FollowCursor === 2 || (Prop.Panel.FollowCursor === 1 && !fb.IsPlaying))
         fb.GetFocusItem() && Controller.onNewTrack(fb.GetFocusItem(), true);
 }
 
 function on_playback_new_track(metadb) {
+    if (!isInitialized)
+        return;
     if (Prop.Panel.FollowCursor <= 1)
         Controller.onNewTrack(metadb);
 }
 
 function on_playback_stop(reason) {
+    if (!isInitialized)
+        return;
     if (reason !== 2) {
         if (Prop.Panel.FollowCursor === 0 || !fb.GetFocusItem())
             Controller.onStop(reason);
@@ -854,6 +870,19 @@ function on_mouse_lbtn_dblclk(x, y, mask) {
 
 function on_mouse_mbtn_down(x, y, mask) {
     Menu.doCommandByItemId('OpenWithViewer');
+}
+
+function on_key_up(vkey) {
+    if (vkey === 0x2E) { // DEL Key
+        let intButton = 6;
+        if (!on_key_up.date || new Date() - on_key_up.date > 60000) {
+            intButton = ws.Popup(Lang.Label.DeleteImage, 0, window.Name, 36);
+        }
+        if (intButton === 6) {
+            Menu.doCommandByItemId('DeleteImage');
+            on_key_up.date = new Date();
+        }
+    }
 }
 
 function on_drag_enter(action) {
