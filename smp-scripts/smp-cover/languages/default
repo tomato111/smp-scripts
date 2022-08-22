@@ -1,4 +1,4 @@
-﻿;Character Code is UTF-8 with BOM
+;Character Code is UTF-8
 [Message]
 	info_EmbedImage = This is embed image. Instead open Prop.Image.SubstitutedPath
 [Label]

@@ -1,6 +1,6 @@
 ﻿//== code for foo_spider_monkey_panel v1.2.2 or higher ==
 
-window.DefinePanel('smp-popup-history',
+window.DefineScript('smp-popup-history',
     {
         version: '1.0.0',
         author: 'tomato111'

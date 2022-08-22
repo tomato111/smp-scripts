@@ -253,7 +253,7 @@ Ini.prototype = {
         stm.Open();
         try {
             stm.Type = 2; //adTypeText
-            stm.Charset = charset || GetCharsetFromCodepage(utils.FileTest(filename, 'chardet'));
+            stm.Charset = charset || GetCharsetFromCodepage(utils.DetectCharset(filename));
             stm.LoadFromFile(filename); // stm.Position -> 0
 
             this.charset = stm.Charset;
@@ -582,7 +582,7 @@ function readTextFile(file, charset) {
         }
         stm.Position = 0;
         stm.Type = 2; //adTypeText
-        stm.Charset = readTextFile.lastCharset = charset || GetCharsetFromCodepage(utils.FileTest(file, 'chardet'));
+        stm.Charset = readTextFile.lastCharset = charset || GetCharsetFromCodepage(utils.DetectCharset(file));
         str = stm.ReadText(-1); // _autodetect_allでの一行ごとの取得はまともに動かない
     } catch (e) {
         throw new Error("Couldn't open a file.\nIt has most likely been moved, renamed, or deleted.");

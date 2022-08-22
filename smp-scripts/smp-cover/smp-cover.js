@@ -1,6 +1,6 @@
-﻿//== code for foo_spider_monkey_panel v1.6.1 or higher ==
+﻿//== code for foo_spider_monkey_panel v1.5.2 or higher ==
 
-window.DefinePanel('smp-cover',
+window.DefineScript('smp-cover',
     {
         version: '1.1.2',
         author: 'tomato111',
@@ -10,9 +10,10 @@ window.DefinePanel('smp-cover',
 include(fb.ProfilePath + 'smp-scripts\\common\\lib.js');
 
 
+const scriptDir = fb.ProfilePath + 'smp-scripts\\smp-cover\\';
+
 const fs = new ActiveXObject('Scripting.FileSystemObject'); // File System Object
 const ws = new ActiveXObject('WScript.Shell'); // WScript Shell Object
-const scriptDir = fb.ProfilePath + 'smp-scripts\\smp-cover\\';
 const MF_SEPARATOR = 0x00000800;
 const MF_STRING = 0x00000000;
 const MF_GRAYED = 0x00000001;
@@ -579,7 +580,7 @@ const Menu = new CustomMenu();
     //=============
     // main menu items
     //=============
-    const menu_smp_cover = [
+    const menu_items = [
         {
             Flag: MF_STRING,
             Caption: () => Prop.Cycle.Pause ? Lang.Label.ResumeCycle : Lang.Label.PauseCycle,
@@ -770,7 +771,7 @@ const Menu = new CustomMenu();
     //========
     Menu.register({
         id: 'smp-cover',
-        items: menu_smp_cover
+        items: menu_items
     });
 
     Menu.defaultId = () => 'smp-cover';

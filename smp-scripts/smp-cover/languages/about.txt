@@ -1,4 +1,4 @@
-﻿Please put the language file(.ini) here.
+Please put the language file(.ini) here.
 And set a file name without extension in Panel.Language.
 
-Character Code of the language file is UTF-8 with BOM.
+Character Code of the language file is UTF-8.
