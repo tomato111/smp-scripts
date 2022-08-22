@@ -12,7 +12,6 @@ include(fb.ProfilePath + 'smp-scripts\\common\\lib.js');
 
 const fs = new ActiveXObject('Scripting.FileSystemObject'); // File System Object
 const ws = new ActiveXObject('WScript.Shell'); // WScript Shell Object
-const scriptName = 'smp-cover';
 const scriptDir = fb.ProfilePath + 'smp-scripts\\smp-cover\\';
 const MF_SEPARATOR = 0x00000800;
 const MF_STRING = 0x00000000;
@@ -58,14 +57,14 @@ const Prop = new function () {
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
         BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,255)'),
         DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items'), // Add dropped items to playlist. TitleFormatting is available
-        ExcludeFileName: window.GetProperty('Panel.ExcludeFileName', '').split('||').map(name => name.toLowerCase()), // Separate paths by "||"
+        ExcludeFileName: window.GetProperty('Panel.ExcludeFileName', '').split('||').map((name) => name.toLowerCase()), // Separate paths by "||"
         FilerCommand: window.GetProperty('Panel.FilerCommand', '')
     };
 
     window.SetProperty('Panel.FollowCursor', this.Panel.FollowCursor = allowedValue(this.Panel.FollowCursor, 'number', 0, 2, 1));
 
     if (/^RGBA\(.+?\)$/.test(this.Panel.BackgroundColor))
-        this.Panel.BackgroundColor = eval(RegExp.lastMatch);
+        this.Panel.BackgroundColor = RGBA(...this.Panel.BackgroundColor.split(',').map((item) => Number(item.replace(/\D/g, ''))));
 
 
     //==Cycle====
@@ -109,7 +108,7 @@ const Prop = new function () {
     if (!this.Image.Margin)
         window.SetProperty('Image.Margin', this.Image.Margin = '6,6,6,6');
     if (!this.Image.Case.AdjustSize)
-        window.SetProperty('Image.Case.AdjustSize', this.Image.Case.AdjustSize = '0,0,0,0');
+        window.SetProperty('Image.Case.AdjustSize', this.Image.Case.AdjustSize = '4,4,4,4');
     if (!this.Image.Case.FixedSize)
         window.SetProperty('Image.Case.FixedSize', this.Image.Case.FixedSize = '0,0,ww,wh');
     window.SetProperty('Image.Reflect.Ratio', this.Image.Reflect.Ratio = allowedValue(this.Image.Reflect.Ratio, 'number', 0.05, 0.50, 0.15));
@@ -135,7 +134,7 @@ const Lang = {
         const definedLang = languages.map((item) => fs.GetBaseName(item));
 
         if (!Prop.Panel.Lang || !definedLang.includes(Prop.Panel.Lang)) {
-            let lang = prompt(`Please input menu language.\n"${definedLang.join('", "')}" is available.`, scriptName, 'en');
+            let lang = prompt(`Please input menu language.\n"${definedLang.join('", "')}" is available.`, window.Name, 'en');
             if (!definedLang.includes(lang))
                 lang = 'en';
             window.SetProperty('Panel.Language', Prop.Panel.Lang = lang);
@@ -145,7 +144,7 @@ const Lang = {
         const langIni = new Ini(path + Prop.Panel.Lang + '.ini', 'UTF-8');
 
         if (!defaultIni.items.get('Message') || !defaultIni.items.get('Label'))
-            throw new Error(`Faild to load default language file. (${scriptName})`);
+            throw new Error(`Faild to load default language file. (${window.Name})`);
 
 
         ((def, lang) => {
@@ -155,7 +154,7 @@ const Lang = {
 
             for (const [name, value] of tmp0) {
                 const _type = name.split('_')[0].toLowerCase();
-                this.Messages[name] = new Message(tmp1.get(name) || value, scriptName, typelist[_type] || 0);
+                this.Messages[name] = new Message(tmp1.get(name) || value, window.Name, typelist[_type] || 0);
             }
 
             tmp0 = def.get('Label') || new Map();

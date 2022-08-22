@@ -122,7 +122,7 @@ const SMP_Date = new function () {
         font = gdi.Font(Prop.Style.Font_Family, Prop.Style.Font_Size, Number(Prop.Style.Font_Bold));
 
         for (const name in Prop.Style.Color) {
-            color[name] = eval(Prop.Style.Color[name]);
+            color[name] = RGBA(...Prop.Style.Color[name].split(',').map((item) => Number(item.replace(/\D/g, ''))));
         }
 
         setDate();

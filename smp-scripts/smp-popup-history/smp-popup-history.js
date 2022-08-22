@@ -20,10 +20,11 @@ const Prop = new function () {
 
     this.Style = {
         Color: {
-            Background: eval(window.GetProperty('Style.Color.Background', 'RGBA(0,0,0,50)'))
+            Background: window.GetProperty('Style.Color.Background', 'RGBA(0,0,0,50)')
         }
     };
-
+    this.Style.Color.Background = RGBA(...this.Style.Color.Background.split(',').map((item) => Number(item.replace(/\D/g, ''))));
+    
 };
 
 
