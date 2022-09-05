@@ -582,24 +582,24 @@ const Menu = new CustomMenu();
     //=============
     const menu_items = [
         {
-            Flag: MF_STRING,
-            Caption: () => Prop.Cycle.Pause ? Lang.Label.ResumeCycle : Lang.Label.PauseCycle,
-            Func: () => { Prop.Cycle.Pause ? Controller.play() : Controller.pause(); }
+            flag: MF_STRING,
+            label: () => Prop.Cycle.Pause ? Lang.Label.ResumeCycle : Lang.Label.PauseCycle,
+            command: () => { Prop.Cycle.Pause ? Controller.play() : Controller.pause(); }
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.FirstImage,
-            Func: () => { Controller.first(); }
+            flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.FirstImage,
+            command: () => { Controller.first(); }
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.LastImage,
-            Func: () => { Controller.last(); }
+            flag: () => Controller.getCurrImgPaths().length >= 2 ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.LastImage,
+            command: () => { Controller.last(); }
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.OpenWithViewer,
-            Func: () => {
+            flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.OpenWithViewer,
+            command: () => {
                 let path = Controller.getCurrImgPath();
                 if (path.startsWith('<')) {
                     if (Prop.Image.SubstitutedPath) {
@@ -621,35 +621,35 @@ const Menu = new CustomMenu();
                         execCommand(`"${Prop.Panel.ViewerPath}" ${path}`);
                 }
             },
-            ItemId: 'OpenWithViewer'
+            id: 'OpenWithViewer'
         },
         {
-            Flag: () => Prop.Panel.FilerCommand ? (Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED) : null,
-            Caption: Lang.Label.OpenWithFiler,
-            Func: () => {
+            flag: () => Prop.Panel.FilerCommand ? (Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED) : null,
+            label: Lang.Label.OpenWithFiler,
+            command: () => {
                 const path = Controller.getCurrImgPath().match(/^(?:<file:\/\/)?([^>]+)/)[1];
                 execCommand(Prop.Panel.FilerCommand.replace(/\${imgPath}/g, path));
             }
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.OpenFolder,
-            Func: () => {
+            flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.OpenFolder,
+            command: () => {
                 const path = Controller.getCurrImgPath().match(/^(?:<file:\/\/)?([^>]+)/)[1];
                 execCommand('explorer.exe /select,' + path);
             }
         },
         {
-            Flag: MF_SEPARATOR
+            flag: MF_SEPARATOR
         },
         {
-            Flag: MF_GRAYED,
-            Caption: Lang.Label.FollowCursor
+            flag: MF_GRAYED,
+            label: Lang.Label.FollowCursor
         },
         {
-            Flag: () => Prop.Panel.FollowCursor === 1 ? MF_CHECKED : MF_UNCHECKED,
-            Caption: '  ' + Lang.Label.FC_WhenNotPlaying,
-            Func: () => {
+            flag: () => Prop.Panel.FollowCursor === 1 ? MF_CHECKED : MF_UNCHECKED,
+            label: '  ' + Lang.Label.FC_WhenNotPlaying,
+            command: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 1);
                 if (fb.IsPlaying)
                     on_playback_new_track(fb.GetNowPlaying());
@@ -658,17 +658,17 @@ const Menu = new CustomMenu();
             }
         },
         {
-            Flag: () => Prop.Panel.FollowCursor === 2 ? MF_CHECKED : MF_UNCHECKED,
-            Caption: '  ' + Lang.Label.FC_Always,
-            Func: () => {
+            flag: () => Prop.Panel.FollowCursor === 2 ? MF_CHECKED : MF_UNCHECKED,
+            label: '  ' + Lang.Label.FC_Always,
+            command: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 2);
                 on_item_focus_change();
             }
         },
         {
-            Flag: () => Prop.Panel.FollowCursor === 0 ? MF_CHECKED : MF_UNCHECKED,
-            Caption: '  ' + Lang.Label.FC_Never,
-            Func: () => {
+            flag: () => Prop.Panel.FollowCursor === 0 ? MF_CHECKED : MF_UNCHECKED,
+            label: '  ' + Lang.Label.FC_Never,
+            command: () => {
                 window.SetProperty('Panel.FollowCursor', Prop.Panel.FollowCursor = 0);
                 if (fb.IsPlaying)
                     on_playback_new_track(fb.GetNowPlaying());
@@ -677,20 +677,20 @@ const Menu = new CustomMenu();
             }
         },
         {
-            Flag: MF_SEPARATOR
+            flag: MF_SEPARATOR
         },
         {
-            Flag: () => Prop.Image.Case.Enable ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Lang.Label.ShowCase,
-            Func: () => {
+            flag: () => Prop.Image.Case.Enable ? MF_CHECKED : MF_UNCHECKED,
+            label: Lang.Label.ShowCase,
+            command: () => {
                 window.SetProperty('Image.Case.Enable', Prop.Image.Case.Enable = !Prop.Image.Case.Enable);
                 window.Repaint();
             }
         },
         {
-            Flag: () => Prop.Image.Reflect.Enable ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Lang.Label.ShowReflection,
-            Func: () => {
+            flag: () => Prop.Image.Reflect.Enable ? MF_CHECKED : MF_UNCHECKED,
+            label: Lang.Label.ShowReflection,
+            command: () => {
                 window.SetProperty('Image.Reflect.Enable', Prop.Image.Reflect.Enable = !Prop.Image.Reflect.Enable);
                 on_size();
                 ImageLoader.clearCache();
@@ -698,70 +698,70 @@ const Menu = new CustomMenu();
             }
         },
         {
-            Flag: () => Prop.Image.Stretch ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Lang.Label.ImageStretching,
-            Func: () => {
+            flag: () => Prop.Image.Stretch ? MF_CHECKED : MF_UNCHECKED,
+            label: Lang.Label.ImageStretching,
+            command: () => {
                 window.SetProperty('Image.Stretch', Prop.Image.Stretch = !Prop.Image.Stretch);
                 Display.refresh();
             }
         },
         {
-            Flag: () => Prop.Image.AlignLeft ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Lang.Label.AlignLeft,
-            Func: () => {
+            flag: () => Prop.Image.AlignLeft ? MF_CHECKED : MF_UNCHECKED,
+            label: Lang.Label.AlignLeft,
+            command: () => {
                 window.SetProperty('Image.AlignLeft', Prop.Image.AlignLeft = !Prop.Image.AlignLeft);
                 Display.refresh();
             }
         },
         {
-            Flag: () => Prop.Image.AlignBottom ? MF_CHECKED : MF_UNCHECKED,
-            Caption: Lang.Label.AlignBottom,
-            Func: () => {
+            flag: () => Prop.Image.AlignBottom ? MF_CHECKED : MF_UNCHECKED,
+            label: Lang.Label.AlignBottom,
+            command: () => {
                 window.SetProperty('Image.AlignBottom', Prop.Image.AlignBottom = !Prop.Image.AlignBottom);
                 Display.refresh();
             }
         },
         {
-            Flag: MF_SEPARATOR
+            flag: MF_SEPARATOR
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.DeleteImage,
-            Func: () => {
+            flag: () => Controller.getCurrImgPaths().length && !Controller.getCurrImgPath().startsWith('<') ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.DeleteImage,
+            command: () => {
                 sendToRecycleBin(Controller.getCurrImgPath());
                 Display.refresh(); // キャッシュから削除
                 Controller.next();
             },
-            ItemId: 'DeleteImage'
+            id: 'DeleteImage'
         },
         {
-            Flag: MF_SEPARATOR
+            flag: MF_SEPARATOR
         },
         {
-            Flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
-            Caption: Lang.Label.RefreshImage,
-            Func: () => { Display.refresh(); }
+            flag: () => Controller.getCurrImgPaths().length ? MF_STRING : MF_GRAYED,
+            label: Lang.Label.RefreshImage,
+            command: () => { Display.refresh(); }
         },
         {
-            Flag: MF_STRING,
-            Caption: Lang.Label.ClearCache,
-            Func: () => {
+            flag: MF_STRING,
+            label: Lang.Label.ClearCache,
+            command: () => {
                 ImageLoader.clearCache();
                 PathChecker.clearCache();
             }
         },
         {
-            Flag: MF_SEPARATOR
+            flag: MF_SEPARATOR
         },
         {
-            Flag: MF_STRING,
-            Caption: Lang.Label.Prop,
-            Func: () => { window.ShowProperties(); }
+            flag: MF_STRING,
+            label: Lang.Label.Prop,
+            command: () => { window.ShowProperties(); }
         },
         {
-            Flag: MF_STRING,
-            Caption: Lang.Label.Help,
-            Func: () => { execCommand('https://ashiato1.blog.fc2.com/blog-entry-160.html'); }
+            flag: MF_STRING,
+            label: Lang.Label.Help,
+            command: () => { execCommand('https://ashiato1.blog.fc2.com/blog-entry-160.html'); }
         }
     ];
 
@@ -770,11 +770,11 @@ const Menu = new CustomMenu();
     // resister
     //========
     Menu.register({
-        id: 'smp-cover',
+        name: 'smp-cover',
         items: menu_items
     });
 
-    Menu.defaultId = () => 'smp-cover';
+    Menu.defaultName = () => 'smp-cover';
 
 })();
 
@@ -865,11 +865,11 @@ function on_mouse_rbtn_up(x, y, mask) {
 }
 
 function on_mouse_lbtn_dblclk(x, y, mask) {
-    Menu.doCommandByItemId('OpenWithViewer');
+    Menu.doCommandById('OpenWithViewer');
 }
 
 function on_mouse_mbtn_down(x, y, mask) {
-    Menu.doCommandByItemId('OpenWithViewer');
+    Menu.doCommandById('OpenWithViewer');
 }
 
 function on_key_up(vkey) {
@@ -879,7 +879,7 @@ function on_key_up(vkey) {
             intButton = ws.Popup(Lang.Label.DeleteImage, 0, window.Name, 36);
         }
         if (intButton === 6) {
-            Menu.doCommandByItemId('DeleteImage');
+            Menu.doCommandById('DeleteImage');
             on_key_up.date = new Date();
         }
     }

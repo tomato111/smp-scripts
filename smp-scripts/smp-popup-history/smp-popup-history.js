@@ -95,10 +95,10 @@ const SMP_History = new function () {
     this.clear = function (x, y) {
         const ret =
             buildMenu([
-                { Flag: MF_GRAYED, Caption: 'Clear list?' },
-                { Flag: MF_SEPARATOR },
-                { Flag: MF_STRING, Caption: 'OK' },
-                { Flag: MF_STRING, Caption: 'Cancel' }
+                { flag: MF_GRAYED, label: 'Clear list?' },
+                { flag: MF_SEPARATOR },
+                { flag: MF_STRING, label: 'OK' },
+                { flag: MF_STRING, label: 'Cancel' }
             ]).TrackPopupMenu(x, y);
         if (ret === 3) {
             history_items = [];
@@ -162,26 +162,26 @@ const SMP_History = new function () {
                     flag = metadb.Compare(item.metadb) && (item.playlistIdx === playlistIdx || item.playlistName === playlistName) ? MF_CHECKED : MF_STRING;
                 menu_items.push(
                     {
-                        Flag: flag,
-                        Caption: item.name
+                        flag: flag,
+                        label: item.name
                     }
                 );
             }
             menu_items.push(
                 {
-                    Flag: MF_SEPARATOR
+                    flag: MF_SEPARATOR
                 },
                 {
-                    Flag: MF_STRING,
-                    Caption: '(Clear)'
+                    flag: MF_STRING,
+                    label: '(Clear)'
                 }
             );
         }
         else {
             menu_items.push(
                 {
-                    Flag: MF_GRAYED,
-                    Caption: '(Empty)'
+                    flag: MF_GRAYED,
+                    label: '(Empty)'
                 }
             );
         }
@@ -193,7 +193,7 @@ const SMP_History = new function () {
         let idx = 1;
         const _menu = window.CreatePopupMenu();
         for (const item of items) {
-            _menu.AppendMenuItem(item.Flag, idx++, item.Caption);
+            _menu.AppendMenuItem(item.flag, idx++, item.label);
         }
         return _menu;
     };

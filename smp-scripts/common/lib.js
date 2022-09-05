@@ -327,84 +327,86 @@ Ini.prototype = {
 //-- Menu Builder --
 function CustomMenu() {
 
-    const registered = {};
-    let _menu, _item_list;
+    const regMenus = new Map();
+    const regIdItems = new Map();
+    let menu, item_list, idx;
 
-    const buildMenu = function (items, parentMenu, flag, caption, radio) {
-        if (arguments.length === 1) buildMenu.init();
+    const init = () => {
+        item_list = {};
+        idx = 1;
+    };
+
+    const buildMenu = function (items, parentMenu, flag, label, radio) {
+        if (arguments.length === 1)
+            init();
 
         const _menu = window.CreatePopupMenu();
-        let start_idx = buildMenu.idx;
+        const start_idx = idx;
         if (parentMenu)
-            _menu.AppendTo(parentMenu, flag, caption);
+            _menu.AppendTo(parentMenu, flag, label);
         if (items instanceof Function) {
-            items(_menu, buildMenu.item_list);
+            items(_menu, item_list);
             return;
         }
         for (const item of items) {
-            const flag = (item.Flag instanceof Function) ? item.Flag() : item.Flag;
+            const flag = (item.flag instanceof Function) ? item.flag() : item.flag;
             if (flag === null)
                 continue;
-            const caption = (item.Caption instanceof Function) ? item.Caption() : item.Caption;
-            const radio = (item.Radio instanceof Function) ? item.Radio() : item.Radio;
-            if (item.Sub) {
-                buildMenu(item.Sub, _menu, flag, caption, radio);
+            const label = (item.label instanceof Function) ? item.label() : item.label;
+            const radio = (item.radio instanceof Function) ? item.radio() : item.radio;
+            if (item.sub) {
+                buildMenu((item.sub instanceof Function) ? item.sub() : item.sub, _menu, flag, label, radio);
                 continue;
             }
-            _menu.AppendMenuItem(flag, buildMenu.idx, caption);
-            buildMenu.item_list[buildMenu.idx++] = item;
+            _menu.AppendMenuItem(flag, idx, label);
+            item_list[idx++] = item;
         }
 
-        isFinite(radio) && _menu.CheckMenuRadioItem(start_idx, buildMenu.idx - 1, start_idx + Number(radio));
+        isFinite(radio) && _menu.CheckMenuRadioItem(start_idx, idx - 1, start_idx + Number(radio));
         return _menu;
     };
-    buildMenu.init = function () {
-        this.item_list = {};
-        this.idx = 1;
-    };
 
-    this.defaultId = function () { };
+    this.isShown = false;
+    this.name = undefined;
+    this.defaultName = function () { };
 
     this.register = function (mobj) {
-        const { id, items } = mobj;
-        if (id)
-            registered[id] = items;
-        items.filter((item) => item.ItemId).forEach((item) => {
-            registered[`itemId_${item.ItemId}`] = item;
+        const { name, items } = mobj;
+        if (name)
+            regMenus.set(name, items);
+        items.filter((item) => item.id).forEach((item) => {
+            regIdItems.set(item.id, item);
         });
     };
 
     this.build = function (mobj = {}) {
-        let { id, items } = mobj;
+        let { name, items } = mobj;
         if (!items) {
-            if (registered[id])
-                items = registered[id];
-            else {
-                id = this.defaultId();
-                items = registered[id];
-            }
+            if (!regMenus.has(name))
+                name = this.defaultName();
+            items = regMenus.get(name);
         }
-        _menu = buildMenu(items);
-        _item_list = buildMenu.item_list;
-        this.id = id;
-        return { _menu, _item_list };
+        menu = buildMenu(items);
+        this.name = name;
+
+        return { menu, item_list };
     };
 
     this.show = function (x, y) {
         this.isShown = true;
-        const item_list = _item_list; // メニュー表示中に_item_listの参照先が変わる可能性があるので参照を保持
-        const ret = _menu.TrackPopupMenu(x, y);
+        const list = item_list; // メニュー表示中に_item_listの参照先が変わる可能性があるので参照を保持
+        const ret = menu.TrackPopupMenu(x, y);
         if (ret !== 0) {
-            if (item_list[ret])
-                item_list[ret].Func instanceof Function && item_list[ret].Func();
+            if (list[ret])
+                list[ret].command instanceof Function && list[ret].command();
             else
-                item_list._context.ExecuteByID(ret - item_list._contextIdx);
+                list._context.ExecuteByID(ret - list._contextIdx);
         }
         (() => { this.isShown = false; }).timeout(10);
     };
 
-    this.insertItems = function (id, index, items) {
-        const list = registered[id];
+    this.insertItems = function (targetName, index, items) {
+        const list = regMenus.get(targetName);
         if (list instanceof Array) {
             if (index < 0)
                 index = Math.max(list.length + index + 1, 0);
@@ -413,15 +415,41 @@ function CustomMenu() {
 
             const temp = list.splice(index, list.length - index);
             list.push(...items.concat(temp));
+
+            items.filter((item) => item.id).forEach((item) => {
+                regIdItems.set(item.id, item);
+            });
         }
     };
 
-    this.doCommandByItemId = function (itemId) {
-        const item = registered[`itemId_${itemId}`];
-        if (item instanceof Object && item.Func instanceof Function) {
-            const flag = (item.Flag instanceof Function) ? item.Flag() : item.Flag;
+    this.deleteItems = function (targetName, index, num) {
+        const list = regMenus.get(targetName);
+        if (list instanceof Array) {
+            if (index < 0)
+                index = Math.max(list.length + index + 1, 0);
+            else
+                index = Math.min(index, list.length);
+
+            list.splice(index, num);
+        }
+    };
+
+    this.findIndex = function (targetName, callback) {
+        const list = regMenus.get(targetName) || [];
+        return list.findIndex(callback);
+    };
+
+    this.find = function (targetName, callback) {
+        const list = regMenus.get(targetName) || [];
+        return list.find(callback);
+    };
+
+    this.doCommandById = function (id) {
+        const item = regIdItems.get(id);
+        if (item instanceof Object && item.command instanceof Function) {
+            const flag = (item.flag instanceof Function) ? item.flag() : item.flag;
             if (flag !== 1 && flag !== 2)
-                item.Func();
+                item.command();
         }
     };
 
