@@ -1,0 +1,36 @@
+﻿pl = {
+    name: 'plugin_test',
+    label: 'test',
+    author: 'foo bar',
+    onStartUp: function () {
+    },
+    onCommand: function () {
+        fb.ShowConsole();
+        fb.ShowPopupMessage('Test Message', 'Test Title', 0);
+        this.menuitem.flag ^= 0x00000008; // MF_CHECKED
+    },
+    on_playback_new_track: function (metadb) {
+        console.log('new track!');
+    },
+    on_mouse_lbtn_down: function (x, y, mask) {
+        console.log('clicked!');
+    },
+    on_playback_seek: function (time) {
+        console.log('seeked!');
+    }
+};
+
+/*
+[Available Callbacks]
+https://theqwertiest.github.io/foo_spider_monkey_panel/assets/generated_files/docs/html/module-callbacks.html
+
+[Methods that can be used for other]
+onStartUp: Called when the plugin is loaded.
+onCommand: Called when the plugin menu item is clicked.
+
+[Hint]
+* 'name' property is required.
+* If the 'label' property is omitted, the menu item will be hidden.
+* If you want to cancel the click event in the body script, return { prevent: true, bodyResult: true or false } in on_mouse_rbtn_up etc..
+
+*/

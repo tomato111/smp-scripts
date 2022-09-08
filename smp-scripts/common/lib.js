@@ -455,6 +455,135 @@ function CustomMenu() {
 
 }
 
+//-- Plugin Loader --
+function PluginLoader() {
+
+    this.items = {};
+    this.entries = [];
+
+    let lastArgs = [],
+        lastMenuItems = [];
+
+    this.load = function (path, excludeNames = []) {
+        lastArgs = arguments;
+        this.items = {};
+        this.entries = [];
+
+        const headerRE = /^[^{]*/;
+        const jsPaths = utils.Glob(path + '*.js');
+        for (const path of jsPaths) {
+            let str, js;
+            try {
+                str = readTextFile(path);
+            } catch (e) { continue; }
+            try {
+                eval(str.replace(headerRE, 'js='));
+            } catch (e) {
+                console.log(`${path} is SyntaxError. (${window.Name})`);
+                continue;
+            }
+            if (!excludeNames.includes(js.name))
+                this.items[js.name] = js;
+        }
+        this.entries = Object.entries(this.items);
+        hook();
+        createMenuItems();
+        onStartUp();
+    };
+
+    this.reload = function () {
+        this.load(...lastArgs);
+    };
+
+    this.getMenuItems = function () {
+        return lastMenuItems;
+    };
+
+    const _this = this;
+    const hooked = new Set();
+
+    const hook = function () {
+        const global = Function('return this')();
+        const down_up_RE = /(?:_down|_up|_dblclk)$/;
+        const callbackNames = new Set();
+
+        for (const [, js] of _this.entries) {
+            for (const key of Object.keys(js)) {
+                if (key.startsWith('on_'))
+                    callbackNames.add(key);
+            }
+        }
+        for (const key of callbackNames) {
+            if (hooked.has(key))
+                continue;
+            hooked.add(key);
+
+            if (Object.prototype.hasOwnProperty.call(global, key) && !(global[key] instanceof Function))
+                continue;
+
+            const orig = global[key] || function () { };
+            global[key] = function () {
+                let origResult;
+                if (!down_up_RE.test(key))
+                    origResult = orig.apply(global, arguments);
+                for (const [, js] of _this.entries) {
+                    if (js[key] instanceof Function) {
+                        const { prevent, bodyResult } = js[key](...arguments) || {};
+                        if (prevent)
+                            return bodyResult;
+                    }
+                }
+                if (down_up_RE.test(key))
+                    origResult = orig.apply(global, arguments);
+
+                return origResult;
+            };
+        }
+    };
+
+    const createMenuItems = function () {
+        const MF_SEPARATOR = 0x00000800;
+        const MF_STRING = 0x00000000;
+        const pluginsFolder = lastArgs[0];
+
+        const menu_items = [];
+        for (const [, js] of _this.entries) {
+            if (!js.label) // Do not build to menu item if label is not set.
+                continue;
+            const item = {};
+            item['flag'] = MF_STRING;
+            item['label'] = js.label;
+            item['command'] = () => { js.onCommand instanceof Function && js.onCommand(); };
+            js.menuitem = item;
+            menu_items.push(item);
+        }
+        menu_items.push(
+            {
+                flag: MF_SEPARATOR
+            },
+            {
+                flag: MF_STRING,
+                label: 'Reload plugins',
+                command: () => { _this.reload(); }
+            },
+            {
+                flag: MF_STRING,
+                label: 'Open plugins folder',
+                command: () => { execCommand(pluginsFolder); }
+            }
+        );
+        lastMenuItems = menu_items;
+    };
+
+    const onStartUp = function () {
+        for (const [, js] of _this.entries) {
+            if (js.onStartUp instanceof Function)
+                js.onStartUp();
+        }
+    };
+
+}
+
 
 //=======================
 //= Function ============
@@ -653,7 +782,7 @@ function responseBodyToFile(bin, file) {
     return file;
 }
 
-function getHTML(data, method, file, async, depth, onLoaded, header) {
+function XMLHttp(data, method, file, async, depth, onLoaded, header) {
     let request;
     try {
         request = new ActiveXObject('Msxml2.XMLHTTP.6.0');
@@ -672,7 +801,7 @@ function getHTML(data, method, file, async, depth, onLoaded, header) {
         if (request.readyState === 4) {
             try { onLoaded(request, depth, file); }
             catch (e) {
-                fb.ShowPopupMessage('Error: onLoaded function in getHTML has crashed\n\n' + file.match(/^https?:\/\/.+?\//) + '\n\n' + e.message);
+                fb.ShowPopupMessage('Error: onLoaded function in XMLHttp has crashed\n\n' + file.match(/^https?:\/\/.+?\//) + '\n\n' + e.message);
             }
         }
     };
@@ -687,6 +816,7 @@ function getHTML(data, method, file, async, depth, onLoaded, header) {
     }
     request.send(data);
 }
+XMLHttp.ASYNC = true;
 
 //-- Metadb --
 function writeTagField(text, field, metadb) {

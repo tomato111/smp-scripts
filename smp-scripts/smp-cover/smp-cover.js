@@ -751,7 +751,8 @@ const Menu = new CustomMenu();
             }
         },
         {
-            flag: MF_SEPARATOR
+            flag: MF_SEPARATOR,
+            id: 'Common'
         },
         {
             flag: MF_STRING,
@@ -777,6 +778,31 @@ const Menu = new CustomMenu();
     Menu.defaultName = () => 'smp-cover';
 
 })();
+
+
+//=======================
+//= Load Plugin =========
+//=======================
+
+const Plugins = new PluginLoader();
+Plugins.load(scriptDir + 'plugins\\');
+
+if (Plugins.entries.length) {
+    const targetName = Menu.defaultName();
+    const index = Menu.findIndex(targetName, (item) => item.id === 'Common');
+    Menu.insertItems(targetName, index,
+        [
+            {
+                flag: MF_SEPARATOR
+            },
+            {
+                flag: MF_STRING,
+                label: Lang.Label.Plugins,
+                sub: () => Plugins.getMenuItems()
+            }
+        ]
+    );
+}
 
 
 //========================
