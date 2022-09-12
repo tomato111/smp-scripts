@@ -572,6 +572,22 @@ const Controller = new function () {
 
 
 //========================
+//= Define StatusBar =====
+//========================
+const StatusBar = new InfoBar();
+StatusBar.setStyle(
+    {
+        fontNames: ['Meiryo', 'Segoe UI', 'Tahoma'],
+        fontHeight: 18,
+        fontStyle: StatusBar.Bold,
+        color: RGB(220, 220, 220),
+        backgroundColor: RGBA(90, 90, 90, 230),
+        borderColor: RGBA(160, 160, 160, 230)
+    }
+);
+
+
+//========================
 //= Define Menu Object ===
 //========================
 const Menu = new CustomMenu();
@@ -608,10 +624,12 @@ const Menu = new CustomMenu();
                         else
                             path = fb.TitleFormat(Prop.Image.SubstitutedPath).Eval();
 
-                        Lang.Messages.info_EmbedImage.fbpopup();
+                        StatusBar.showText(Lang.Messages.info_SubstitutedPath.ret());
                     }
-                    else
+                    else {
                         path = null;
+                        StatusBar.showText(Lang.Messages.info_EmbeddedImage.ret(), 5000);
+                    }
                 }
 
                 if (path) {

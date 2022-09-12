@@ -584,6 +584,118 @@ function PluginLoader() {
 
 }
 
+//-- StatusBar --
+function InfoBar() {
+
+    const SF_ALIGN_LEFT = 0x00000000;
+    const SF_TRIM_EllipsisCharacter = 0x00300000;
+
+    const fontSizeMap = new Map();
+    let style, timer;
+
+    this.setStyle = function ({
+        fontNames = ['Meiryo', 'Segoe UI', 'Tahoma'],
+        fontHeight = 18,
+        fontStyle = InfoBar.prototype.Bold,
+        color = RGB(220, 220, 220),
+        backgroundColor = RGBA(90, 90, 90, 255),
+        borderColor = RGBA(160, 160, 160, 255)
+    }) {
+
+        let fontName, fontSize;
+        for (const name of fontNames) {
+            if (utils.CheckFont(name)) {
+                fontName = name;
+                break;
+            }
+        }
+        if (fontSizeMap.has(fontName))
+            fontSize = fontSizeMap.get(fontName);
+        else {
+            let tmpSize = 11;
+            for (; ;) {
+                if (gdi.Font(fontName, ++tmpSize, fontStyle).Height >= fontHeight)
+                    break;
+            }
+            fontSizeMap.set(fontName, tmpSize);
+            fontSize = tmpSize;
+        }
+        style = {
+            font: gdi.Font(fontName, fontSize, fontStyle),
+            color,
+            backgroundColor,
+            borderColor
+        };
+    };
+
+    this.setText = function (str = '', x = 3, y = window.Height - 2, w = window.Width - 6, h = window.Height) {
+        if (w < 1 || w < 1)
+            return;
+
+        let temp_bmp = gdi.CreateImage(1, 1);
+        let temp_gr = temp_bmp.GetGraphics();
+
+        style.text = String(str);
+        style.w = w;
+        style.h = temp_gr.MeasureString(style.text, style.font, 0, 0, w, h, 0).Height || style.font.Height;
+        style.x = x;
+        style.y = y - style.h;
+        //console.log('-----', style.h, style.font.Height, style.font.Size, style.font.Name);
+
+        temp_bmp.ReleaseGraphics(temp_gr);
+        temp_gr = temp_bmp = null;
+    };
+
+    this.show = function (time = 8000) {
+        this.hide.clearTimeout();
+        timer = true;
+        window.Repaint();
+        this.hide.timeout(time);
+    };
+
+    this.hide = function () {
+        timer = false;
+        window.Repaint();
+    };
+
+    this.showText = function (str, time, x, y, w, h) {
+        this.setText(str, x, y, w, h);
+        this.show(time);
+    };
+
+    const hook = function () {
+        const global = Function('return this')();
+        const key = 'on_paint';
+
+        if (Object.prototype.hasOwnProperty.call(global, key) && !(global[key] instanceof Function))
+            return;
+
+        const orig = global[key] || function () { };
+        global[key] = function (gr) {
+            orig.apply(global, arguments);
+
+            if (timer && style && typeof style.text === 'string') {
+                const { text, x, y, w, h, font, color, backgroundColor, borderColor } = style;
+                gr.SetTextRenderingHint(5);
+                gr.FillSolidRect(x, y, w, h, backgroundColor);
+                gr.DrawRect(x - 1, y - 1, w + 2, h + 2, 1, borderColor);
+                gr.DrawString(text, font, color, x + 3, y, w - 6, h, SF_ALIGN_LEFT | SF_TRIM_EllipsisCharacter);
+                gr.SetTextRenderingHint(4);
+            }
+        };
+    };
+    hook();
+
+}
+InfoBar.prototype = {
+    Regular: 0,
+    Bold: 1,
+    Italic: 2,
+    BoldItalic: 3,
+    Underline: 4,
+    Strikeout: 8
+};
+
 
 //=======================
 //= Function ============
