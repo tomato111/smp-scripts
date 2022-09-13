@@ -324,6 +324,50 @@ Ini.prototype = {
     }
 };
 
+//-- Language Loader --
+function LanguageLoader() {
+
+    const addedSections = new Set();
+
+    this.clear = function () {
+        addedSections.forEach((name) => { delete this[name]; });
+        addedSections.clear();
+        this.definedLangs = [];
+        this.lastLang = '';
+    };
+
+    this.load = function (path, lang = 'en') {
+
+        const filePaths = utils.Glob(path + '*.ini');
+        const definedLangs = filePaths.map((item) => utils.SplitFilePath(item)[1].toLowerCase());
+
+        if (!definedLangs.includes(lang.toLowerCase()))
+            return;
+
+        this.definedLangs = definedLangs;
+        this.lastLang = lang;
+
+        const typeList = { conf: 36, warn: 48, info: 64 };
+        const langIni = new Ini(path + lang + '.ini', 'UTF-8');
+
+        for (const [section, map] of langIni.items) {
+            addedSections.add(section);
+            this[section] = this[section] || {};
+            if (section === 'Message')
+                for (const [key, value] of map) {
+                    const type = key.split('_')[0].toLowerCase();
+                    this[section][key] = new Message(value, window.Name, typeList[type] || 0);
+                }
+            else
+                for (const [key, value] of map) {
+                    this[section][key] = value;
+                }
+        }
+    };
+
+    this.clear();
+}
+
 //-- Menu Builder --
 function CustomMenu() {
 

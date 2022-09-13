@@ -54,7 +54,7 @@ const Prop = new function () {
     this.Panel = {
         Path: window.GetProperty('Panel.Path', '<front>||<back>||$directory_path(%path%)\\*.*'), // Separate paths by "||"
         FollowCursor: window.GetProperty('Panel.FollowCursor', 1), // 0: Never, 1: When not playing, 2: Always
-        Lang: window.GetProperty('Panel.Language', '').toLowerCase(),
+        Lang: window.GetProperty('Panel.Language', ''),
         ViewerPath: window.GetProperty('Panel.ViewerPath', ''),
         BackgroundColor: window.GetProperty('Panel.BackgroundColor', 'RGBA(0,0,0,255)'),
         DragDropToPlaylist: window.GetProperty('Panel.DragDropToPlaylist', 'Dropped Items'), // Add dropped items to playlist. TitleFormatting is available
@@ -124,53 +124,9 @@ const Prop = new function () {
 //= Load Language =======
 //=======================
 
-const Lang = {
-
-    Messages: {},
-    Label: {},
-
-    load: function (path) {
-
-        const languages = utils.Glob(path + '*.ini');
-        const definedLang = languages.map((item) => fs.GetBaseName(item));
-
-        if (!Prop.Panel.Lang || !definedLang.includes(Prop.Panel.Lang)) {
-            let lang = prompt(`Please input menu language.\n"${definedLang.join('", "')}" is available.`, window.Name, 'en');
-            if (!definedLang.includes(lang))
-                lang = 'en';
-            window.SetProperty('Panel.Language', Prop.Panel.Lang = lang);
-        }
-
-        const defaultIni = new Ini(path + 'default', 'UTF-8');
-        const langIni = new Ini(path + Prop.Panel.Lang + '.ini', 'UTF-8');
-
-        if (!defaultIni.items.get('Message') || !defaultIni.items.get('Label'))
-            throw new Error(`Faild to load default language file. (${window.Name})`);
-
-
-        ((def, lang) => {
-            let tmp0 = def.get('Message') || new Map();
-            let tmp1 = lang.get('Message') || new Map();
-            const typelist = { conf: 36, warn: 48, info: 64 };
-
-            for (const [name, value] of tmp0) {
-                const _type = name.split('_')[0].toLowerCase();
-                this.Messages[name] = new Message(tmp1.get(name) || value, window.Name, typelist[_type] || 0);
-            }
-
-            tmp0 = def.get('Label') || new Map();
-            tmp1 = lang.get('Label') || new Map();
-
-            for (const [name, value] of tmp0) {
-                this.Label[name] = tmp1.get(name) || value;
-            }
-
-        })(defaultIni.items, langIni.items);
-
-    }
-};
-
-Lang.load(scriptDir + 'languages\\');
+const Lang = new LanguageLoader();
+Lang.load(scriptDir + 'languages\\', 'en');
+Lang.load(scriptDir + 'languages\\', Prop.Panel.Lang);
 
 
 //========================
@@ -624,11 +580,11 @@ const Menu = new CustomMenu();
                         else
                             path = fb.TitleFormat(Prop.Image.SubstitutedPath).Eval();
 
-                        StatusBar.showText(Lang.Messages.info_SubstitutedPath.ret());
+                        StatusBar.showText(Lang.Message.info_SubstitutedPath.ret());
                     }
                     else {
                         path = null;
-                        StatusBar.showText(Lang.Messages.info_EmbeddedImage.ret(), 5000);
+                        StatusBar.showText(Lang.Message.info_EmbeddedImage.ret(), 5000);
                     }
                 }
 
@@ -831,6 +787,13 @@ if (Plugins.entries.length) {
     window.DlgCode = 0x0004;
     isLoaded = true;
     on_size();
+    if (Lang.lastLang !== Prop.Panel.Lang) {
+        let lang = utils.InputBox(0, `Please input menu language.\n"${Lang.definedLangs.join('", "')}" is available.`, window.Name, Lang.lastLang);
+        if (!Lang.definedLangs.includes(lang.toLowerCase()))
+            lang = Lang.lastLang;
+        window.SetProperty('Panel.Language', lang);
+        window.Reload();
+    }
 }).timeout(200); // Delay loading for stability
 
 
