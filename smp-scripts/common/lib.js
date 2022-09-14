@@ -410,6 +410,17 @@ function CustomMenu() {
         return _menu;
     };
 
+    const registerId = function (items) {
+        if (items instanceof Function)
+            return;
+        for (const item of items) {
+            if (item.id)
+                regIdItems.set(item.id, item);
+            if (item.sub)
+                registerId(item.sub instanceof Function ? item.sub() : item.sub);
+        }
+    };
+
     this.isShown = false;
     this.name = undefined;
     this.defaultName = function () { };
@@ -418,9 +429,7 @@ function CustomMenu() {
         const { name, items } = mobj;
         if (name)
             regMenus.set(name, items);
-        items.filter((item) => item.id).forEach((item) => {
-            regIdItems.set(item.id, item);
-        });
+        registerId(items);
     };
 
     this.build = function (mobj = {}) {
@@ -460,9 +469,7 @@ function CustomMenu() {
             const temp = list.splice(index, list.length - index);
             list.push(...items.concat(temp));
 
-            items.filter((item) => item.id).forEach((item) => {
-                regIdItems.set(item.id, item);
-            });
+            registerId(items);
         }
     };
 
@@ -486,6 +493,10 @@ function CustomMenu() {
     this.find = function (targetName, callback) {
         const list = regMenus.get(targetName) || [];
         return list.find(callback);
+    };
+
+    this.getItemById = function (id) {
+        return regIdItems.get(id);
     };
 
     this.doCommandById = function (id) {
@@ -591,13 +602,14 @@ function PluginLoader() {
         const pluginsFolder = lastArgs[0];
 
         const menu_items = [];
-        for (const [, js] of _this.entries) {
+        for (const [name, js] of _this.entries) {
             if (!js.label) // Do not build to menu item if label is not set.
                 continue;
             const item = {};
             item['flag'] = MF_STRING;
             item['label'] = js.label;
             item['command'] = () => { js.onCommand instanceof Function && js.onCommand(); };
+            item['id'] = name;
             js.menuitem = item;
             menu_items.push(item);
         }
@@ -607,13 +619,9 @@ function PluginLoader() {
             },
             {
                 flag: MF_STRING,
-                label: 'Reload plugins',
-                command: () => { _this.reload(); }
-            },
-            {
-                flag: MF_STRING,
                 label: 'Open plugins folder',
-                command: () => { execCommand(pluginsFolder); }
+                command: () => { execCommand(pluginsFolder); },
+                id: 'OpenPluginsFolder'
             }
         );
         lastMenuItems = menu_items;

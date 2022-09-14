@@ -2,7 +2,7 @@
 
 window.DefineScript('smp-cover',
     {
-        version: '1.1.2',
+        version: '1.2.0',
         author: 'tomato111',
         features: { drag_n_drop: true }
     }
@@ -776,6 +776,7 @@ if (Plugins.entries.length) {
             }
         ]
     );
+    Menu.getItemById('OpenPluginsFolder').label = Lang.Label.OpenPluginsFolder;
 }
 
 
